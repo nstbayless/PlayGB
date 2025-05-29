@@ -54,7 +54,7 @@ ULIBDIR =
 ULIBS = 
 
 # Create main.lua
-$(shell bash ./genmain.sh > Source/main.lua)
+$(shell bash ./genmain.sh > Source/amain.lua)
 
 override LDSCRIPT=./link_map.ld
 

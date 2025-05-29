@@ -1,0 +1,6 @@
+gb: 20007b0c
+wram: 60019b08
+vram: 6001bb08
+lcd: 60008ea4
+gb_rom: 6001db20
+itcm: 20007d44

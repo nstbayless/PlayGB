@@ -4644,6 +4644,15 @@ enum gb_init_error_e gb_init(struct gb_s *gb,
     gb->breakpoint_c = 0;
     gb->breakpoints = NULL;
     
+    playdate->system->logToConsole("gb: %x", gb);
+    playdate->system->logToConsole("wram: %x", wram);
+    playdate->system->logToConsole("vram: %x", vram);
+    playdate->system->logToConsole("lcd: %x", lcd);
+    playdate->system->logToConsole("gb_rom: %x", gb_rom);
+    #if ITCM_CORE
+    playdate->system->logToConsole("itcm: %x", core_itcm_reloc);
+    #endif
+    
     assert(aligned(gb->lcd, CACHE_LINE));
 
 	/* Initialise serial transfer function to NULL. If the front-end does

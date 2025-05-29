@@ -163,9 +163,14 @@ void assert_impl(bool b, const char* msg)
     if (!b) playdate->system->error("Assertion failed: %s", msg);
 }
 
+void* pgb_malloc_aligned_to(size_t size, unsigned align, unsigned v)
+{
+    size += align - 1;
+    return (void*)
+        ((((uintptr_t)(pgb_malloc(size)) + align - 1 - v)/align)*align) + v;
+}
+
 void* pgb_malloc_aligned(size_t size)
 {
-    size += CACHE_LINE - 1;
-    return (void*)
-        ((((uintptr_t)(pgb_malloc(size)) + CACHE_LINE - 1)/CACHE_LINE)*CACHE_LINE);
+    return pgb_malloc_aligned_to(size, 0);
 }

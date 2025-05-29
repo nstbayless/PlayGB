@@ -51,9 +51,14 @@ void* pgb_calloc(size_t count, size_t size);
 void pgb_free(void *ptr);
 void assert_impl(bool b, const char* msg);
 
+static inline bool aligned_to(void* v, unsigned align, unsigned x)
+{
+    return (uintptr_t)v % align == x;
+}
+
 static inline bool aligned(void* v, unsigned align)
 {
-    return (uintptr_t)v % align == 0;
+    return aligned_to(v, align, 0);
 }
 
 static inline bool cache_aligned(void* v)
@@ -62,6 +67,8 @@ static inline bool cache_aligned(void* v)
 }
 
 void* pgb_malloc_aligned(size_t size);
+
+void* pgb_malloc_aligned_to(size_t size, unsigned v);
 
 #define assert(x) assert_impl(x, #x)
 

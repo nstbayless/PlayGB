@@ -55,9 +55,10 @@ static bool PGB_GameScene_bitmask_done = false;
         
         // allocate in tcm, aligned
         uintptr_t core_itcm_reloc_u = dtcm_alloc(itcm_core_size + CACHE_LINE);
-        core_itcm_reloc_u += CACHE_LINE - 1;
+        core_itcm_reloc_u += CACHE_LINE - 1 - 0x4;
         core_itcm_reloc_u /= CACHE_LINE;
         core_itcm_reloc_u *= CACHE_LINE;
+        core_itcm_reloc_u += 0x4;
         core_itcm_reloc = (void*)core_itcm_reloc_u;
         
         memcpy(core_itcm_reloc, __itcm_start, itcm_core_size);
