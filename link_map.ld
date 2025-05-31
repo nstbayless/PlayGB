@@ -30,8 +30,12 @@ SECTIONS
 		*(.text.*)
 		
 		/* code to copy to TCM, seemingly runs faster */
-		. = ALIGN(32); . += 0xC;
+		. = ALIGN(32);
+		. += 0xc;
         __itcm_start = .;
+		*(.itcm.short)
+		. = ALIGN(32);
+		. += 0x6;
 	    *(.itcm)
 	    *(.itcm.*)
         __itcm_end = .;
@@ -63,7 +67,7 @@ SECTIONS
  		*(SORT(.dtors.*))
  		*(.dtors)
 		
-		. = ALIGN(32); . += 0x04;
+		. = ALIGN(32);
 		
 		__rodata_start__ = .;
 		*(.rodata*)
@@ -75,7 +79,7 @@ SECTIONS
 	{
 		__etext = .;
 		
-		. = ALIGN(32); . += 0x18;
+		. = ALIGN(32);
 
 		__data_start__ = .;
 		*(vtable)
@@ -109,7 +113,7 @@ SECTIONS
 
 	.bss :
 	{
-		. = ALIGN(32); . += 0x04;
+		. = ALIGN(32);
 		__bss_start__ = .;
 		*(.bss*)
 		*(COMMON)

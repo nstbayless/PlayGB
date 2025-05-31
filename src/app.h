@@ -59,6 +59,7 @@ void *dtcm_alloc(size_t size);
 // relocatable and tightly-packed interpreter code
 #ifdef TARGET_SIMULATOR
 #define __core __attribute__((optimize("O0")))
+#define __core_section(x) __core
 #define __space __attribute__((optimize("O0")))
 #else
 #define __space __attribute__((optimize("Os")))
@@ -66,9 +67,13 @@ void *dtcm_alloc(size_t size);
 #define __core                                                        \
     __attribute__((optimize("Os"))) __attribute__((section(".itcm"))) \
     __attribute__((short_call))
+#define __core_section(x)                                             \
+    __attribute__((optimize("Os"))) __attribute__((section(".itcm." x))) \
+    __attribute__((short_call))
 #else
 #define __core \
     __attribute__((optimize("Os"))) __attribute__((section(".text.itcm")))
+#define __core_section(x) __core
 #endif
 #endif
 
@@ -95,6 +100,12 @@ extern void *core_itcm_reloc;
 void itcm_core_init(void);
 #else
 #define ITCM_CORE_FN(fn) fn
+#endif
+
+#ifdef TARGET_SIMULATOR
+#define clalign
+#else
+#define clalign __attribute__((aligned(32)))
 #endif
 
 #endif /* app_h */

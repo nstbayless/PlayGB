@@ -16,7 +16,7 @@
 #include "revcheck.h"
 
 static const float TARGET_TIME_PER_GB_FRAME_MS = 1000.0f / 59.73f;
-static const uint8_t MAX_CONSECUTIVE_DRAW_SKIPS = 2;
+static uint8_t MAX_CONSECUTIVE_DRAW_SKIPS = 2;
 static const uint8_t ADJUSTMENT_PERIOD_FRAMES = 60;
 
 PGB_GameScene *audioGameScene = NULL;

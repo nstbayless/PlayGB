@@ -1070,7 +1070,7 @@ __shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
     (gb->gb_error)(gb, GB_INVALID_WRITE, addr);
 }
 
-__core static uint8_t __gb_read(struct gb_s *gb, const uint16_t addr)
+__core_section("short") static uint8_t __gb_read(struct gb_s *gb, const uint16_t addr)
 {
     if likely (addr < 0x4000)
     {
@@ -1088,7 +1088,7 @@ __core static uint8_t __gb_read(struct gb_s *gb, const uint16_t addr)
     return __gb_read_full(gb, addr);
 }
 
-__core static void __gb_write(struct gb_s *gb, const uint16_t addr, uint8_t v)
+__core_section("short") static void __gb_write(struct gb_s *gb, const uint16_t addr, uint8_t v)
 {
     if likely (addr >= 0xC000 && addr < 0xE000)
     {
@@ -1106,19 +1106,19 @@ __core static uint16_t __gb_read16(struct gb_s *restrict gb, u16 addr)
     return v;
 }
 
-__core static void __gb_write16(struct gb_s *restrict gb, u16 addr, u16 v)
+__core_section("short") static void __gb_write16(struct gb_s *restrict gb, u16 addr, u16 v)
 {
     // TODO: optimize
     __gb_write(gb, addr, v & 0xFF);
     __gb_write(gb, addr + 1, v >> 8);
 }
 
-__core static uint8_t __gb_fetch8(struct gb_s *restrict gb)
+__core_section("short") static uint8_t __gb_fetch8(struct gb_s *restrict gb)
 {
     return __gb_read(gb, gb->cpu_reg.pc++);
 }
 
-__core static uint16_t __gb_fetch16(struct gb_s *restrict gb)
+__core_section("short") static uint16_t __gb_fetch16(struct gb_s *restrict gb)
 {
     u16 v;
     u16 addr = gb->cpu_reg.pc;
@@ -1141,7 +1141,7 @@ __core static uint16_t __gb_fetch16(struct gb_s *restrict gb)
     return v;
 }
 
-__core static uint16_t __gb_pop16(struct gb_s *restrict gb)
+__core_section("short") static uint16_t __gb_pop16(struct gb_s *restrict gb)
 {
     u16 v;
     if likely (gb->cpu_reg.sp >= HRAM_ADDR && gb->cpu_reg.sp < 0xFFFE)
@@ -1157,7 +1157,7 @@ __core static uint16_t __gb_pop16(struct gb_s *restrict gb)
     return v;
 }
 
-__core static void __gb_push16(struct gb_s *restrict gb, u16 v)
+__core_section("short") static void __gb_push16(struct gb_s *restrict gb, u16 v)
 {
     gb->cpu_reg.sp -= 2;
 

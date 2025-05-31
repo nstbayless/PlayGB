@@ -42,10 +42,6 @@
     __attribute__((short_call))
 #endif
 
-// FIXME why does this give +2 fps? We aren't even running it from TCM
-#undef __audio
-#define __audio __core
-
 /**
  * Memory holding audio registers between 0xFF10 and 0xFF3F inclusive.
  */
