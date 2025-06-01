@@ -774,7 +774,7 @@ __shell uint8_t __gb_read_full(struct gb_s *gb, const uint_fast16_t addr)
 #if ENABLE_BGCACHE
 // tile data was changed, so we need to redraw this tile where it appears in the tilemap
 // tmidx: index of tile in map to update. (0x400+ is the second map.)
-void __gb_update_bgcache(struct gb_s *restrict gb, int addr_mode, const int tmidx, const uint8_t tile)
+__core_section("bgcache") void __gb_update_bgcache_tile(struct gb_s *restrict gb, int addr_mode, const int tmidx, const uint8_t tile)
 {
     int ty = tmidx / 0x20;
     int tx = tmidx % 0x20;
@@ -805,26 +805,33 @@ void __gb_write_vram(struct gb_s *gb, uint_fast16_t addr, const uint8_t val)
     gb->vram[addr] = val;
     if (addr < 0x1800)
     {
-        int tile = (addr / 16);
+        unsigned tile = (addr / 16);
         // tile data update -- scan tilemap for matching tiles
         for (int i = 0; i < 0x800; ++i)
         {
-            int _t = gb->vram[0x1800 + i];
-            if (_t == tile)
+            unsigned _t = gb->vram[0x1800 + i];
+            
+            // handle both tile addressing modes
+            if (_t == tile % 256 && tile < 0x80)
             {
-                __gb_update_bgcache(gb, 0, i, _t);
+                __gb_update_bgcache_tile(gb, 0, i, _t);
             }
-            if (_t + 128 == tile)
+            else if (_t == tile % 256 && tile >= 0x100)
             {
-                __gb_update_bgcache(gb, 1, i, _t);
+                __gb_update_bgcache_tile(gb, 1, i, _t);
+            }
+            else if (_t == tile % 256)
+            {
+                __gb_update_bgcache_tile(gb, 0, i, _t);
+                __gb_update_bgcache_tile(gb, 1, i, _t);
             }
         }
     }
     else
     {
         int tmidx = addr - 0x1800;
-        __gb_update_bgcache(gb, 0, tmidx, val);
-        __gb_update_bgcache(gb, 1, tmidx, val);
+        __gb_update_bgcache_tile(gb, 0, tmidx, val);
+        __gb_update_bgcache_tile(gb, 1, tmidx, val);
     }
 }
 #endif
