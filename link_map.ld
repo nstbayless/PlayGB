@@ -9,6 +9,10 @@ GROUP(libgcc.a libc.a libm.a)
 	
 	. = ALIGN(32);
 	. += (OFFSET);
+	
+	The emulator's performance seems very sensitive to the location of
+	some functions, so we specify their alignment precisely simply for
+	stability.
 */
 
 SECTIONS
@@ -31,10 +35,12 @@ SECTIONS
 		
 		/* code to copy to TCM, seemingly runs faster */
 		. = ALIGN(32);
+		. += 0x6;
         __itcm_start = .;
 		*(.itcm.short)
-		*(.itcm.draw)
 		*(.itcm)
+		. = ALIGN(32);
+		*(.itcm.draw)
 		. = ALIGN(32); . += 0x6;
 		*(.itcm.cb)
 		. = ALIGN(32);
