@@ -256,7 +256,9 @@ static void PGB_LibraryScene_update(void *object)
                                         coverImage, 0, 0, scale, scale);
                                     playdate->graphics->popContext();
 
-                                    int coverX = leftPanelWidth + 1;
+                                    int coverX =
+                                        leftPanelWidth + 1 +
+                                        ((rightPanelWidth - imageWidth) / 2);
                                     int coverY =
                                         (screenHeight - scaledHeight) / 2;
 
@@ -272,7 +274,9 @@ static void PGB_LibraryScene_update(void *object)
                             }
                             else
                             {
-                                int coverX = leftPanelWidth + 1;
+                                int coverX =
+                                    leftPanelWidth + 1 +
+                                    ((rightPanelWidth - imageWidth) / 2);
                                 int coverY = (screenHeight - imageHeight) / 2;
 
                                 playdate->system->logToConsole(
