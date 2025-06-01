@@ -61,7 +61,7 @@ typedef int16_t s16;
 #endif
 
 #ifndef ENABLE_BGCACHE
-#define ENABLE_BGCACHE 1
+#define ENABLE_BGCACHE 0
 #endif
 
 /* Enable LCD drawing. On by default. May be turned off for testing purposes. */
@@ -447,7 +447,9 @@ struct gb_s
     uint8_t hram[HRAM_SIZE];
     uint8_t oam[OAM_SIZE];
     uint8_t *lcd;
+#if ENABLE_BGCACHE
     uint8_t *bgcache;
+#endif
 
     struct
     {
@@ -483,8 +485,6 @@ struct gb_s
 
         /* Playdate custom implementation */
         uint8_t back_fb_enabled : 1;
-
-        uint32_t line_priority[(LCD_WIDTH + 31) / 32];
     } display;
 
     /**
@@ -924,7 +924,7 @@ __shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
         #if ENABLE_BGCACHE
             __gb_write_vram(gb, addr, val);
         #else
-            gb->vram[addr - 0x8000] = val;
+            gb->vram[addr - VRAM_ADDR] = val;
         #endif
         return;
 
@@ -1434,14 +1434,13 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
 {
     uint8_t *pixels = &gb->lcd[gb->gb_reg.LY * LCD_WIDTH_PACKED];
 
-    __builtin_prefetch(gb->display.line_priority, 1);
     __builtin_prefetch(pixels, 1);
 
-    for (int i = 0; i < PEANUT_GB_ARRAYSIZE(gb->display.line_priority); ++i)
-        gb->display.line_priority[i] = 0;
+    uint32_t line_priority[(LCD_WIDTH + 31) / 32];
+    for (int i = 0; i < PEANUT_GB_ARRAYSIZE(line_priority); ++i)
+        line_priority[i] = 0;
 
     uint32_t priority_bits = 0;
-    uint32_t* line_priority = gb->display.line_priority;
     
     int wx = LCD_WIDTH;
     if (gb->gb_reg.LCDC & LCDC_WINDOW_ENABLE && gb->gb_reg.LY >= gb->display.WY && gb->gb_reg.WX < LCD_WIDTH+7)
@@ -1462,7 +1461,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         }
 
     /* If background is enabled, draw it. */
-    if ((gb->gb_reg.LCDC & LCDC_BG_ENABLE) && wx > 0)
+    if ((gb->gb_reg.LCDC & LCDC_BG_ENABLE))
     {
         /* Calculate current background line to draw. Constant because
          * this function draws only this one line each time it is
@@ -1586,7 +1585,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             priority_bits |= (c == 0);
             if (disp_x % 32 == 0)
             {
-                gb->display.line_priority[disp_x / 32] = priority_bits;
+                line_priority[disp_x / 32] = priority_bits;
             }
         }
     #endif
@@ -1656,14 +1655,14 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             priority_bits |= (c == 0);
             if (disp_x % 32 == 0)
             {
-                gb->display.line_priority[disp_x / 32] = priority_bits;
+                line_priority[disp_x / 32] = priority_bits;
             }
         }
 
         // priority where window begins is a bit tricky
         priority_bits <<= (disp_x % 32);
-        gb->display.line_priority[disp_x / 32] &= 0xFFFFFFFF << (disp_x % 32);
-        gb->display.line_priority[disp_x / 32] |= priority_bits;
+        line_priority[disp_x / 32] &= 0xFFFFFFFF << (disp_x % 32);
+        line_priority[disp_x / 32] |= priority_bits;
 
         gb->display.window_clear++;  // advance window line
     }
@@ -1790,10 +1789,10 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
                     uint8_t background_pixel_is_transparent = 0;
                     if (P_segment_index >= 0 &&
                         P_segment_index <
-                            PEANUT_GB_ARRAYSIZE(gb->display.line_priority))
+                            PEANUT_GB_ARRAYSIZE(line_priority))
                     {
                         background_pixel_is_transparent =
-                            (gb->display.line_priority[P_segment_index] >>
+                            (line_priority[P_segment_index] >>
                              P_bit_in_segment) &
                             1;
                     }
@@ -5056,9 +5055,11 @@ enum gb_init_error_e gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram,
 
     gb->wram = wram;
     gb->vram = vram;
+#if ENABLE_BGCACHE
     static clalign uint8_t bgcache[BGCACHE_SIZE];
     memset(bgcache, 0, sizeof(bgcache));
     gb->bgcache = bgcache;
+#endif
     gb->lcd = lcd;
     gb->gb_rom = gb_rom;
     gb->gb_error = gb_error;
