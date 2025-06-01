@@ -1436,7 +1436,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
 
     __builtin_prefetch(pixels, 1);
 
-    uint32_t line_priority[(LCD_WIDTH + 31) / 32];
+    uint32_t line_priority[((LCD_WIDTH + 31) / 32)];
     for (int i = 0; i < PEANUT_GB_ARRAYSIZE(line_priority); ++i)
         line_priority[i] = 0;
 
@@ -1659,10 +1659,14 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             }
         }
 
-        // priority where window begins is a bit tricky
-        priority_bits <<= (disp_x % 32);
-        line_priority[disp_x / 32] &= 0xFFFFFFFF << (disp_x % 32);
-        line_priority[disp_x / 32] |= priority_bits;
+        // FIXME -- why is this guard needed..?
+        if (disp_x / 32 < PEANUT_GB_ARRAYSIZE(line_priority))
+        {
+            // priority where window begins is a bit tricky
+            priority_bits <<= (disp_x % 32);
+            line_priority[disp_x / 32] &= 0xFFFFFFFF << (disp_x % 32);
+            line_priority[disp_x / 32] |= priority_bits;
+        }
 
         gb->display.window_clear++;  // advance window line
     }
