@@ -60,6 +60,10 @@ typedef int16_t s16;
 #define ENABLE_SOUND 1
 #endif
 
+#ifndef ENABLE_BGCACHE
+#define ENABLE_BGCACHE 1
+#endif
+
 /* Enable LCD drawing. On by default. May be turned off for testing purposes. */
 #ifndef ENABLE_LCD
 #define ENABLE_LCD 1
@@ -151,6 +155,14 @@ typedef int16_t s16;
 #define LCD_BITS_PER_PIXEL (8 / LCD_PACKING)
 #define LCD_WIDTH_PACKED (LCD_WIDTH / LCD_PACKING)
 #define LCD_HEIGHT 144
+
+// 2 tile indexing modes
+// 2 screens
+// 256 lines
+// 256 pixels
+// 4 pixels per byte
+#define BGCACHE_SIZE (2*2*256*256/4)
+#define BGCACHE_STRIDE (256/4)
 
 /* VRAM Locations */
 #define VRAM_TILES_1 (0x8000 - VRAM_ADDR)
@@ -435,6 +447,7 @@ struct gb_s
     uint8_t hram[HRAM_SIZE];
     uint8_t oam[OAM_SIZE];
     uint8_t *lcd;
+    uint8_t *bgcache;
 
     struct
     {
@@ -758,6 +771,64 @@ __shell uint8_t __gb_read_full(struct gb_s *gb, const uint_fast16_t addr)
     return 0xFF;
 }
 
+#if ENABLE_BGCACHE
+// tile data was changed, so we need to redraw this tile where it appears in the tilemap
+// tmidx: index of tile in map to update. (0x400+ is the second map.)
+void __gb_update_bgcache(struct gb_s *restrict gb, int addr_mode, const int tmidx, const uint8_t tile)
+{
+    int ty = tmidx / 0x20;
+    int tx = tmidx % 0x20;
+    int tile_data_addr = 0x1000*(addr_mode && tile < 128) + ((int)tile)*0x10;
+    uint8_t *bgcache = gb->bgcache + addr_mode*(BGCACHE_SIZE/2);
+    uint8_t *vram = gb->vram;
+    for (int tline = 0; tline < 8; ++tline)
+    {
+        int y = tline + ty * 8;
+        uint8_t t1 = vram[tile_data_addr + 2*tline];
+        uint8_t t2 = vram[tile_data_addr + 2*tline + 1];
+        uint16_t* t = (uint16_t*)(void*)&bgcache[tx*2 + y*BGCACHE_STRIDE];
+        *t = 0;
+        for (int j = 0; j < 8; ++j)
+        {
+            uint8_t p1 = t1 >> j;
+            uint8_t p2 = t2 >> j;
+            int c = (p1&1) | ((p2&1)<<1);
+            *t |= c << (14-2*j);
+        }
+    }
+}
+
+void __gb_write_vram(struct gb_s *gb, uint_fast16_t addr, const uint8_t val)
+{
+    addr -= 0x8000;
+    if (gb->vram[addr] == val) return;
+    gb->vram[addr] = val;
+    if (addr < 0x1800)
+    {
+        int tile = (addr / 16);
+        // tile data update -- scan tilemap for matching tiles
+        for (int i = 0; i < 0x800; ++i)
+        {
+            int _t = gb->vram[0x1800 + i];
+            if (_t == tile)
+            {
+                __gb_update_bgcache(gb, 0, i, _t);
+            }
+            if (_t + 128 == tile)
+            {
+                __gb_update_bgcache(gb, 1, i, _t);
+            }
+        }
+    }
+    else
+    {
+        int tmidx = addr - 0x1800;
+        __gb_update_bgcache(gb, 0, tmidx, val);
+        __gb_update_bgcache(gb, 1, tmidx, val);
+    }
+}
+#endif
+
 /**
  * Internal function used to write bytes.
  */
@@ -843,7 +914,11 @@ __shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
 
     case 0x8:
     case 0x9:
-        gb->vram[addr - VRAM_ADDR] = val;
+        #if ENABLE_BGCACHE
+            __gb_write_vram(gb, addr, val);
+        #else
+            gb->vram[addr - 0x8000] = val;
+        #endif
         return;
 
     case 0xA:
@@ -1359,15 +1434,52 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         gb->display.line_priority[i] = 0;
 
     uint32_t priority_bits = 0;
+    
+    int wx = LCD_WIDTH;
+    if (gb->gb_reg.LCDC & LCDC_WINDOW_ENABLE && gb->gb_reg.LY >= gb->display.WY && gb->gb_reg.WX < LCD_WIDTH+7)
+    {
+        // TODO: behaviour of wx if WX = 0-6 or WX = 166; apparently there are hardware bugs?
+        if (gb->gb_reg.WX >= 7)
+        {
+            wx = gb->gb_reg.WX - 7;
+        }
+    }
 
     /* If background is enabled, draw it. */
-    if (gb->gb_reg.LCDC & LCDC_BG_ENABLE)
+    if ((gb->gb_reg.LCDC & LCDC_BG_ENABLE) && wx > 0)
     {
         /* Calculate current background line to draw. Constant because
          * this function draws only this one line each time it is
          * called. */
         const uint8_t bg_y = gb->gb_reg.LY + gb->gb_reg.SCY;
 
+    #if ENABLE_BGCACHE
+        uint8_t bg_x = gb->gb_reg.SCX;
+        int addr_mode_2 = !(gb->gb_reg.LCDC & LCDC_TILE_SELECT);
+        int map2 = !!(gb->gb_reg.LCDC & LCDC_BG_MAP);
+        uint32_t* bgcache = (uint32_t*)(
+            gb->bgcache + (bg_y*BGCACHE_STRIDE) + addr_mode_2*(BGCACHE_SIZE/2) + map2*(BGCACHE_SIZE/4)
+        );
+        uint32_t lo = bgcache[(bg_x/16) % 0x10];
+        uint32_t hi = bgcache[(bg_x/16 + 1) % 0x10];
+        for (int i = 0; i < (wx + 15)/16; ++i)
+        {
+            uint32_t* out = (uint32_t*)(void*)(pixels) + i;
+            int xm = (bg_x % 16)*2;
+            *out = (lo >> xm);
+            if (xm != 0)
+                *out |= (hi << (32 - xm));
+            lo = hi;
+            hi = bgcache[(bg_x/16 + i + 2) % 0x10];
+        }
+    #else
+        /* The displays (what the player sees) X coordinate, drawn right
+         * to left. */
+        uint8_t disp_x = LCD_WIDTH - 1;
+
+        /* The X coordinate to begin drawing the background at. */
+        uint8_t bg_x = disp_x + gb->gb_reg.SCX;
+        
         /* Get selected background map address for first tile
          * corresponding to current line.
          * 0x20 (32) is the width of a background tile, and the bit
@@ -1375,13 +1487,6 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         const uint16_t bg_map =
             ((gb->gb_reg.LCDC & LCDC_BG_MAP) ? VRAM_BMAP_2 : VRAM_BMAP_1) +
             (bg_y >> 3) * 0x20;
-
-        /* The displays (what the player sees) X coordinate, drawn right
-         * to left. */
-        uint8_t disp_x = LCD_WIDTH - 1;
-
-        /* The X coordinate to begin drawing the background at. */
-        uint8_t bg_x = disp_x + gb->gb_reg.SCX;
 
         /* Get tile index for current background tile. */
         uint8_t idx = gb->vram[bg_map + (bg_x >> 3)];
@@ -1438,11 +1543,11 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
                 gb->display.line_priority[disp_x / 32] = priority_bits;
             }
         }
+    #endif
     }
 
     /* draw window */
-    if (gb->gb_reg.LCDC & LCDC_WINDOW_ENABLE &&
-        gb->gb_reg.LY >= gb->display.WY && gb->gb_reg.WX <= 166)
+    if (wx < LCD_WIDTH)
     {
         /* Calculate Window Map Address. */
         uint16_t win_line =
@@ -4905,6 +5010,9 @@ enum gb_init_error_e gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram,
 
     gb->wram = wram;
     gb->vram = vram;
+    static clalign uint8_t bgcache[BGCACHE_SIZE];
+    memset(bgcache, 0, sizeof(bgcache));
+    gb->bgcache = bgcache;
     gb->lcd = lcd;
     gb->gb_rom = gb_rom;
     gb->gb_error = gb_error;
