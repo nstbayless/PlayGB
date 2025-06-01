@@ -61,7 +61,7 @@ typedef int16_t s16;
 #endif
 
 #ifndef ENABLE_BGCACHE
-#define ENABLE_BGCACHE 0
+#define ENABLE_BGCACHE 1
 #endif
 
 /* Enable LCD drawing. On by default. May be turned off for testing purposes. */
@@ -447,9 +447,7 @@ struct gb_s
     uint8_t hram[HRAM_SIZE];
     uint8_t oam[OAM_SIZE];
     uint8_t *lcd;
-#if ENABLE_BGCACHE
     uint8_t *bgcache;
-#endif
 
     struct
     {
@@ -1433,11 +1431,12 @@ __core_section("draw") static u8 __gb_get_pixel(uint8_t *line, u8 x)
 __core_section("draw") void __gb_draw_line(struct gb_s *gb)
 {
     uint8_t *pixels = &gb->lcd[gb->gb_reg.LY * LCD_WIDTH_PACKED];
+    uint32_t line_priority[((LCD_WIDTH + 31) / 32)];
+    const uint32_t line_priority_len = PEANUT_GB_ARRAYSIZE(line_priority);
 
     __builtin_prefetch(pixels, 1);
 
-    uint32_t line_priority[((LCD_WIDTH + 31) / 32)];
-    for (int i = 0; i < PEANUT_GB_ARRAYSIZE(line_priority); ++i)
+    for (int i = 0; i < line_priority_len; ++i)
         line_priority[i] = 0;
 
     uint32_t priority_bits = 0;
@@ -1660,7 +1659,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         }
 
         // FIXME -- why is this guard needed..?
-        if (disp_x / 32 < PEANUT_GB_ARRAYSIZE(line_priority))
+        if (disp_x / 32 < line_priority_len)
         {
             // priority where window begins is a bit tricky
             priority_bits <<= (disp_x % 32);
@@ -1793,7 +1792,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
                     uint8_t background_pixel_is_transparent = 0;
                     if (P_segment_index >= 0 &&
                         P_segment_index <
-                            PEANUT_GB_ARRAYSIZE(line_priority))
+                            line_priority_len)
                     {
                         background_pixel_is_transparent =
                             (line_priority[P_segment_index] >>
