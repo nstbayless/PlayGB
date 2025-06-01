@@ -1434,6 +1434,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         gb->display.line_priority[i] = 0;
 
     uint32_t priority_bits = 0;
+    uint32_t* line_priority = gb->display.line_priority;
     
     int wx = LCD_WIDTH;
     if (gb->gb_reg.LCDC & LCDC_WINDOW_ENABLE && gb->gb_reg.LY >= gb->display.WY && gb->gb_reg.WX < LCD_WIDTH+7)
@@ -1470,17 +1471,45 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         );
         uint8_t pal = gb->gb_reg.BGP;
         uint32_t hi = bgcache[(bg_x/16) % 0x10];
-        BG_REMAP(pal, hi, hi);
         for (int i = 0; i < (wx + 15)/16; ++i)
         {
             uint32_t* out = (uint32_t*)(void*)(pixels) + i;
             uint32_t lo = hi;
             hi = bgcache[(bg_x/16 + i + 1) % 0x10];
-            BG_REMAP(pal, hi, hi);
             int xm = (bg_x % 16)*2;
-            *out = (lo >> xm);
+            uint32_t raw = (lo >> xm);
             if (xm != 0)
-                *out |= (hi << (32 - xm));
+                raw |= (hi << (32 - xm));
+            
+            uint32_t rm = 0;
+            BG_REMAP(pal, raw, rm);
+            *out = rm;
+            
+            // calculate priority
+            uint32_t pp = raw | (raw >> 1);
+            /*uint16_t p = 0
+                | ((pp & (1 << 1)) >> 1)
+                | ((pp & (1 << 3)) >> 2)
+                | ((pp & (1 << 5)) >> 3)
+                | ((pp & (1 << 7)) >> 4)
+                | ((pp & (1 << 9)) >> 5)
+                | ((pp & (1 << 11)) >> 6)
+                | ((pp & (1 << 13)) >> 7)
+                | ((pp & (1 << 15)) >> 8)
+                | ((pp & (1 << 17)) >> 9)
+                | ((pp & (1 << 19)) >> 10)
+                | ((pp & (1 << 21)) >> 11)
+                | ((pp & (1 << 23)) >> 12)
+                | ((pp & (1 << 25)) >> 13)
+                | ((pp & (1 << 27)) >> 14)
+                | ((pp & (1 << 29)) >> 15)
+                | ((pp & (1 << 31)) >> 16);*/
+            uint16_t p = 0;
+            for (int j = 0; j < 16; ++j)
+            {
+                p |= (pp >> (j*2)) & 1;
+            }
+            *((uint16_t*)line_priority + i) = p^0xFFFF;
         }
     #else
         /* The displays (what the player sees) X coordinate, drawn right
