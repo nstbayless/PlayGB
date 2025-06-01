@@ -321,10 +321,17 @@ void PGB_ListView_update(PGB_ListView *listView)
             {
                 listView->textScrollTime += PGB_App->dt;
 
-                float pauseAtStartDuration = 3.0f;
-                float scrollToEndDuration = 3.0f;
+                // Pixels per second for scroll-to-end
+                const float TEXT_SCROLL_BASE_SPEED_PPS = 50.0f;
+
+                // Prevents super-fast scrolls for tiny overflows.
+                const float MIN_SCROLL_DURATION = 0.75f;
+
+                // Makes scroll-back duration 2/3 of scroll-to-end duration
+                const float SCROLL_BACK_DURATION_FACTOR = 2.0f / 3.0f;
+
+                float pauseAtStartDuration = 1.5f;
                 float pauseAtEndDuration = 2.0f;
-                float scrollToStartDuration = 2.0f;
 
                 float maxOffset = textWidth - availableWidth;
 
@@ -334,9 +341,25 @@ void PGB_ListView_update(PGB_ListView *listView)
                 }
                 else
                 {
+                    float dynamicScrollToEndDuration =
+                        maxOffset / TEXT_SCROLL_BASE_SPEED_PPS;
+                    float dynamicScrollToStartDuration =
+                        dynamicScrollToEndDuration *
+                        SCROLL_BACK_DURATION_FACTOR;
+                    ;
+
+                    if (dynamicScrollToEndDuration < MIN_SCROLL_DURATION)
+                    {
+                        dynamicScrollToEndDuration = MIN_SCROLL_DURATION;
+                    }
+                    if (dynamicScrollToStartDuration < MIN_SCROLL_DURATION)
+                    {
+                        dynamicScrollToStartDuration = MIN_SCROLL_DURATION;
+                    }
+
                     float totalCycleDuration =
-                        pauseAtStartDuration + scrollToEndDuration +
-                        pauseAtEndDuration + scrollToStartDuration;
+                        pauseAtStartDuration + dynamicScrollToEndDuration +
+                        pauseAtEndDuration + dynamicScrollToStartDuration;
 
                     float currentTimeInCycle =
                         fmodf(listView->textScrollTime, totalCycleDuration);
@@ -345,32 +368,42 @@ void PGB_ListView_update(PGB_ListView *listView)
                     {
                         button->textScrollOffset = 0.0f;
                     }
-                    else if (currentTimeInCycle <
-                             (pauseAtStartDuration + scrollToEndDuration))
+                    else if (currentTimeInCycle < (pauseAtStartDuration +
+                                                   dynamicScrollToEndDuration))
                     {
                         float timeIntoScrollToEnd =
                             currentTimeInCycle - pauseAtStartDuration;
-                        float normalizedScrollProgress =
-                            timeIntoScrollToEnd / scrollToEndDuration;
+                        float normalizedScrollProgress = 0.0f;
+                        if (dynamicScrollToEndDuration > 0)
+                        {
+                            normalizedScrollProgress =
+                                timeIntoScrollToEnd /
+                                dynamicScrollToEndDuration;
+                        }
 
                         button->textScrollOffset =
                             pgb_easeInOutQuad(normalizedScrollProgress) *
                             maxOffset;
                     }
                     else if (currentTimeInCycle <
-                             (pauseAtStartDuration + scrollToEndDuration +
-                              pauseAtEndDuration))
+                             (pauseAtStartDuration +
+                              dynamicScrollToEndDuration + pauseAtEndDuration))
                     {
                         button->textScrollOffset = maxOffset;
                     }
-                    else
+                    else  // Scrolling to start
                     {
                         float timeIntoScrollToStart =
                             currentTimeInCycle -
-                            (pauseAtStartDuration + scrollToEndDuration +
+                            (pauseAtStartDuration + dynamicScrollToEndDuration +
                              pauseAtEndDuration);
-                        float normalizedScrollProgress =
-                            timeIntoScrollToStart / scrollToStartDuration;
+                        float normalizedScrollProgress = 0.0f;
+                        if (dynamicScrollToStartDuration > 0)
+                        {
+                            normalizedScrollProgress =
+                                timeIntoScrollToStart /
+                                dynamicScrollToStartDuration;
+                        }
 
                         button->textScrollOffset =
                             (1.0f -
