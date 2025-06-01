@@ -1444,6 +1444,14 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             wx = gb->gb_reg.WX - 7;
         }
     }
+    
+    #define BG_REMAP(pal, u, v) \
+        for (int _q = 0; _q < 32; _q += 2) { \
+            int p = (u >> _q) & 3; \
+            p = (pal >> (2*p)) & 3; \
+            v &= ~(3 << _q); \
+            v |= p << _q; \
+        }
 
     /* If background is enabled, draw it. */
     if ((gb->gb_reg.LCDC & LCDC_BG_ENABLE) && wx > 0)
@@ -1460,17 +1468,19 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         uint32_t* bgcache = (uint32_t*)(
             gb->bgcache + (bg_y*BGCACHE_STRIDE) + addr_mode_2*(BGCACHE_SIZE/2) + map2*(BGCACHE_SIZE/4)
         );
-        uint32_t lo = bgcache[(bg_x/16) % 0x10];
-        uint32_t hi = bgcache[(bg_x/16 + 1) % 0x10];
+        uint8_t pal = gb->gb_reg.BGP;
+        uint32_t hi = bgcache[(bg_x/16) % 0x10];
+        BG_REMAP(pal, hi, hi);
         for (int i = 0; i < (wx + 15)/16; ++i)
         {
             uint32_t* out = (uint32_t*)(void*)(pixels) + i;
+            uint32_t lo = hi;
+            BG_REMAP(pal, hi, hi);
+            hi = bgcache[(bg_x/16 + i + 1) % 0x10];
             int xm = (bg_x % 16)*2;
             *out = (lo >> xm);
             if (xm != 0)
                 *out |= (hi << (32 - xm));
-            lo = hi;
-            hi = bgcache[(bg_x/16 + i + 2) % 0x10];
         }
     #else
         /* The displays (what the player sees) X coordinate, drawn right
