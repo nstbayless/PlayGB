@@ -15,9 +15,9 @@ static void PGB_ListView_selectItem(PGB_ListView *listView, unsigned int index,
 static void PGB_ListItem_super_free(PGB_ListItem *item);
 
 static int PGB_ListView_rowHeight = 32;
-static int PGB_ListView_inset = 14;
-static int PGB_ListView_scrollInset = 4;
-static int PGB_ListView_scrollIndicatorWidth = 4;
+static int PGB_ListView_inset = 4;
+static int PGB_ListView_scrollInset = 2;
+static int PGB_ListView_scrollIndicatorWidth = 2;
 static int PGB_ListView_scrollIndicatorMinHeight = 40;
 
 static float PGB_ListView_repeatInterval1 = 0.15;
@@ -309,7 +309,11 @@ void PGB_ListView_update(PGB_ListView *listView)
                 PGB_App->subheadFont, button->title, strlen(button->title),
                 kUTF8Encoding, 0);
             int availableWidth =
-                listView->frame.width - (PGB_ListView_inset * 2);
+                listView->scroll.active
+                    ? listView->frame.width - (PGB_ListView_inset * 2)
+                    : listView->frame.width - PGB_ListView_inset -
+                          (PGB_ListView_scrollInset * 2) -
+                          (PGB_ListView_scrollIndicatorWidth * 2);
 
             button->needsTextScroll = (textWidth > availableWidth);
 
@@ -322,7 +326,7 @@ void PGB_ListView_update(PGB_ListView *listView)
                 float pauseAtEndDuration = 2.0f;
                 float scrollToStartDuration = 2.0f;
 
-                float maxOffset = textWidth - availableWidth - 10;
+                float maxOffset = textWidth - availableWidth;
 
                 if (maxOffset <= 0)
                 {
@@ -486,7 +490,8 @@ void PGB_ListView_draw(PGB_ListView *listView)
             int indicatorLineWidth = 1;
 
             PDRect indicatorFillRect =
-                PDRectMake(listX + PGB_ListView_scrollInset,
+                PDRectMake(listView->frame.width - PGB_ListView_scrollInset -
+                               PGB_ListView_scrollIndicatorWidth,
                            listView->scroll.indicatorOffset,
                            PGB_ListView_scrollIndicatorWidth,
                            listView->scroll.indicatorHeight);
