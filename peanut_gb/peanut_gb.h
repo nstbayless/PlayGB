@@ -1475,8 +1475,8 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         {
             uint32_t* out = (uint32_t*)(void*)(pixels) + i;
             uint32_t lo = hi;
-            BG_REMAP(pal, hi, hi);
             hi = bgcache[(bg_x/16 + i + 1) % 0x10];
+            BG_REMAP(pal, hi, hi);
             int xm = (bg_x % 16)*2;
             *out = (lo >> xm);
             if (xm != 0)
