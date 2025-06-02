@@ -1697,7 +1697,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
     if (wx < LCD_WIDTH)
     {
         #if ENABLE_BGCACHE
-        uint8_t bg_x = wx; // CHECKME -- does window scroll? Should this be 0?
+        uint8_t bg_x = 256 - wx; // CHECKME -- does window scroll? Should this be 0?
         uint8_t bg_y = gb->gb_reg.LY - gb->display.WY;
         int addr_mode_2 = !(gb->gb_reg.LCDC & LCDC_TILE_SELECT);
         int map2 = !!(gb->gb_reg.LCDC & LCDC_WINDOW_MAP);
