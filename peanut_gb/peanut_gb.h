@@ -833,17 +833,13 @@ void __gb_update_bgcache_tile(struct gb_s *restrict gb, int addr_mode, const int
     for (int tline = 0; tline < 8; ++tline)
     {
         int y = tline + ty * 8;
-        uint8_t t1 = vram[tile_data_addr + 2*tline];
-        uint8_t t2 = vram[tile_data_addr + 2*tline + 1];
-        uint16_t* t = (uint16_t*)(void*)&bgcache[tx*2 + y*BGCACHE_STRIDE];
-        *t = 0;
-        for (int j = 0; j < 8; ++j)
-        {
-            uint8_t p1 = t1 >> j;
-            uint8_t p2 = t2 >> j;
-            int c = (p1&1) | ((p2&1)<<1);
-            *t |= c << (14-2*j);
-        }
+        unsigned t1 = vram[tile_data_addr + 2*tline];
+        unsigned t2 = vram[tile_data_addr + 2*tline + 1];
+        
+        // bgcache format: each 32 bits is a pair of 16 bit low color, 16 bit hi color
+        uint8_t* t = &bgcache[(tx/2)*4 + y*BGCACHE_STRIDE + !(tx%2)];
+        t[0] = t1;
+        t[2] = t2;
     }
 }
 
@@ -1563,13 +1559,14 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         }
     }
     
-    #define BG_REMAP(pal, u, v) \
-        for (int _q = 0; _q < 32; _q += 2) { \
-            int p = (u >> _q) & 3; \
-            p = (pal >> (2*p)) & 3; \
-            v &= ~(3 << _q); \
-            v |= p << _q; \
-        }
+    #define BG_REMAP(pal, t1, t2, v) \
+        do {uint32_t t2_ = ((uint32_t)t2) << 1; \
+        for (int _q = 0; _q < 16; _q ++) { \
+            int p = ((t1 >> _q) &1) | ((t2_ >> _q) & 2); \
+            int c = (pal >> (2*p)) & 3; \
+            v <<= 2; \
+            v |= c; \
+        }} while(0)
 
     /* If background is enabled, draw it. */
     if ((gb->gb_reg.LCDC & LCDC_BG_ENABLE))
@@ -1593,24 +1590,19 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             uint32_t* out = (uint32_t*)(void*)(pixels) + i;
             uint32_t lo = hi;
             hi = bgcache[(bg_x/16 + i + 1) % 0x10];
-            int xm = (bg_x % 16)*2;
-            uint32_t raw = (lo >> xm);
-            if (xm != 0)
-                raw |= (hi << (32 - xm));
+            int xm = (bg_x % 16);
+            uint16_t raw1 = ((lo & 0x0000FFFF) << xm);
+            uint16_t raw2 = ((lo & 0xFFFF0000) >> (16 - xm));
+            raw1 |= ((hi & 0x0000FFFF) >> (16 - xm));
+            raw2 |= ((hi & 0xFFFF0000) >> (32 - xm));
             
-            uint32_t rm = raw;
+            uint32_t rm = 0;
             #pragma GCC unroll 16
-            BG_REMAP(pal, raw, rm);
+            BG_REMAP(pal, raw1, raw2, rm);
             *out = rm;
             
             // calculate priority
-            uint32_t pp = raw | (raw >> 1);
-            uint16_t p = 0;
-            #pragma GCC unroll 16
-            for (int j = 0; j < 16; ++j)
-            {
-                p |= (pp >> (j*2)) & 1;
-            }
+            uint16_t p = raw1 | raw2;
             *((uint16_t*)line_priority + i) = p^0xFFFF;
         }
     #else
