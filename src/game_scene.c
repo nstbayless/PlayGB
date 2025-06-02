@@ -61,18 +61,11 @@ static void gb_error(struct gb_s *gb, const enum gb_error_e gb_err,
 static const char *startButtonText = "start";
 static const char *selectButtonText = "select";
 
+static const uint16_t PGB_dither_lut_c0 =
+    0 | (0b1111 << 0) | (0b0111 << 4) | (0b0001 << 8) | (0b0000 << 12);
 
-static const uint16_t PGB_dither_lut_c0 = 0
-    | (0b1111 << 0)
-    | (0b0111 << 4)
-    | (0b0001 << 8)
-    | (0b0000 << 12);
-
-static const uint16_t PGB_dither_lut_c1 = 0
-    | (0b1111 << 0)
-    | (0b1101 << 4)
-    | (0b0100 << 8)
-    | (0b0000 << 12);
+static const uint16_t PGB_dither_lut_c1 =
+    0 | (0b1111 << 0) | (0b1101 << 4) | (0b0100 << 8) | (0b0000 << 12);
 
 static uint8_t PGB_bitmask[4][4][4];
 static bool PGB_GameScene_bitmask_done = false;
@@ -115,7 +108,7 @@ void itcm_core_init(void)
 PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 {
     playdate->system->setCrankSoundsDisabled(true);
-    
+
     PGB_Scene *scene = PGB_Scene_new();
 
     PGB_GameScene *gameScene = pgb_malloc(sizeof(PGB_GameScene));
@@ -522,29 +515,28 @@ static void gb_error(struct gb_s *gb, const enum gb_error_e gb_err,
 
 typedef typeof(playdate->graphics->markUpdatedRows) markUpdateRows_t;
 
-__core_section("fb")
-void update_fb_dirty_lines(uint8_t *restrict framebuffer,
-            uint8_t *restrict lcd,
-            const bool *restrict line_changed_flags,
-            markUpdateRows_t markUpdateRows)
+__core_section("fb") void update_fb_dirty_lines(
+    uint8_t *restrict framebuffer, uint8_t *restrict lcd,
+    const bool *restrict line_changed_flags, markUpdateRows_t markUpdateRows)
 {
     framebuffer += (PGB_LCD_X / 8);
     // const u32 dither = 0b00011111 | (0b00001011 << 8);
     int scale_index = 0;
     unsigned fb_y_playdate_current_bottom =
         PGB_LCD_Y + PGB_LCD_HEIGHT;  // Bottom of drawable area on Playdate
-        
-    uint32_t dither_lut = PGB_dither_lut_c0 | ((uint32_t)PGB_dither_lut_c1 << 16);
+
+    uint32_t dither_lut =
+        PGB_dither_lut_c0 | ((uint32_t)PGB_dither_lut_c1 << 16);
 
     for (int y_gb = LCD_HEIGHT;
-         y_gb --> 0;)  // y_gb is Game Boy line index from top, 143 down to 0
+         y_gb-- > 0;)  // y_gb is Game Boy line index from top, 143 down to 0
     {
         int row_height_on_playdate = 2;
         if (scale_index++ == 2)
         {
             scale_index = 0;
             row_height_on_playdate = 1;
-            
+
             // swap dither pattern on each half-row;
             // yields smoother results
             dither_lut = (dither_lut >> 16) | (dither_lut << 16);
@@ -576,12 +568,12 @@ void update_fb_dirty_lines(uint8_t *restrict framebuffer,
             uint8_t pixels_temp_c0 = orgpixels;
             unsigned p = 0;
 
-            #pragma GCC unroll 4
+#pragma GCC unroll 4
             for (int i = 0; i < 4; ++i)
             {  // Unpack 4 GB pixels from the byte
                 p <<= 2;
                 unsigned c0h = dither_lut >> ((pixels_temp_c0 & 3) * 4);
-                unsigned c0 = (c0h >> ((i*2) % 4)) & 3;
+                unsigned c0 = (c0h >> ((i * 2) % 4)) & 3;
                 p |= c0;
                 pixels_temp_c0 >>= 2;
             }
@@ -597,14 +589,15 @@ void update_fb_dirty_lines(uint8_t *restrict framebuffer,
                     pd_fb_target_byte0 +
                     PLAYDATE_ROW_STRIDE;  // Next Playdate row
                 p = 0;  // Reset p for the second row calculation
-                
-                // FIXME: why does this pragma cause a crash if unroll 4??
-                #pragma GCC unroll 2
+
+// FIXME: why does this pragma cause a crash if unroll 4??
+#pragma GCC unroll 2
                 for (int i = 0; i < 4; ++i)
                 {
                     p <<= 2;
-                    unsigned c1h = dither_lut >> ((pixels_temp_c1 & 3) * 4 + 16);
-                    unsigned c1 = (c1h >> ((i*2) % 4)) & 3;
+                    unsigned c1h =
+                        dither_lut >> ((pixels_temp_c1 & 3) * 4 + 16);
+                    unsigned c1 = (c1h >> ((i * 2) % 4)) & 3;
                     p |= c1;
                     pixels_temp_c1 >>= 2;
                 }
