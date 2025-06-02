@@ -522,10 +522,11 @@ static void gb_error(struct gb_s *gb, const enum gb_error_e gb_err,
 
 typedef typeof(playdate->graphics->markUpdatedRows) markUpdateRows_t;
 
-__core void update_fb_dirty_lines(uint8_t *restrict framebuffer,
-                                  uint8_t *restrict lcd,
-                                  const bool *restrict line_changed_flags,
-                                  markUpdateRows_t markUpdateRows)
+__core_section("fb")
+void update_fb_dirty_lines(uint8_t *restrict framebuffer,
+            uint8_t *restrict lcd,
+            const bool *restrict line_changed_flags,
+            markUpdateRows_t markUpdateRows)
 {
     framebuffer += (PGB_LCD_X / 8);
     // const u32 dither = 0b00011111 | (0b00001011 << 8);
@@ -534,7 +535,7 @@ __core void update_fb_dirty_lines(uint8_t *restrict framebuffer,
         PGB_LCD_Y + PGB_LCD_HEIGHT;  // Bottom of drawable area on Playdate
 
     for (int y_gb = LCD_HEIGHT;
-         y_gb-- > 0;)  // y_gb is Game Boy line index from top, 143 down to 0
+         y_gb --> 0;)  // y_gb is Game Boy line index from top, 143 down to 0
     {
         int row_height_on_playdate = 2;
         if (scale_index++ == 2)
@@ -1317,7 +1318,7 @@ static void PGB_GameScene_generateBitmask(void)
 
     PGB_GameScene_bitmask_done = true;
 
-    for (int palette = 0; palette < 4; palette++)
+    for (int colour = 0; colour < 4; colour++)
     {
         for (int y = 0; y < 4; y++)
         {
@@ -1329,21 +1330,16 @@ static void PGB_GameScene_generateBitmask(void)
 
                 for (int x = 0; x < 2; x++)
                 {
-                    if (PGB_patterns[palette][y][x_offset + x] == 1)
+                    if (PGB_patterns[colour][y][x_offset + x] == 1)
                     {
                         int n = i * 2 + x;
                         mask |= (1 << (7 - n));
                     }
                 }
 
-                PGB_bitmask[palette][i][y] = mask;
+                PGB_bitmask[colour][i][y] = mask;
 
-                x_offset += 2;
-
-                if (x_offset == 4)
-                {
-                    x_offset = 0;
-                }
+                x_offset ^= 2;
             }
         }
     }
