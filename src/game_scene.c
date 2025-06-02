@@ -1357,6 +1357,8 @@ static void PGB_GameScene_free(void *object)
 
     audioGameScene = NULL;
 
+    playdate->system->setMenuImage(NULL, 0);
+
     PGB_Scene_free(gameScene->scene);
 
     PGB_GameScene_saveGame(gameScene);
