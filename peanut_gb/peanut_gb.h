@@ -34,6 +34,10 @@
 
 #ifdef TARGET_SIMULATOR
 #define CPU_VALIDATE 1
+#define PGB_ASSERT(x) \
+    if (!(x)) playdate->system->error("ASSERTION FAILED: %s", #x);
+#else
+#define PGB_ASSERT(x)
 #endif
 
 #include <stdint.h> /* Required for int types */
@@ -65,7 +69,7 @@ typedef int16_t s16;
 #endif
 
 #ifndef ENABLE_BGCACHE_DEFERRED
-    #define ENABLE_BGCACHE_DEFERRED 0
+    #define ENABLE_BGCACHE_DEFERRED 1
 #endif
 
 /* Enable LCD drawing. On by default. May be turned off for testing purposes. */
@@ -451,22 +455,6 @@ struct gb_s
     uint8_t hram[HRAM_SIZE];
     uint8_t oam[OAM_SIZE];
     uint8_t *lcd;
-    
-#if ENABLE_BGCACHE
-    uint8_t *bgcache;
-    
-    #if ENABLE_BGCACHE_DEFERRED
-        bool dirty_tile_data_master : 1;
-        uint32_t dirty_tile_data[0x180 / 32];
-    
-        // invariant: bit n is 1 iff dirty_tiles[n] nonzero.
-        uint64_t dirty_tile_rows;
-        
-        // any tiles in the tilemap that are dirty
-        // (screen 2 at indices >= 32)
-        uint32_t dirty_tiles[64];
-    #endif
-#endif
 
     struct
     {
@@ -538,6 +526,22 @@ struct gb_s
         /* Implementation defined data. Set to NULL if not required. */
         void *priv;
     } direct;
+    
+    #if ENABLE_BGCACHE
+    uint8_t *bgcache;
+    
+        #if ENABLE_BGCACHE_DEFERRED
+            bool dirty_tile_data_master : 1;
+            uint32_t dirty_tile_data[0x180 / 32];
+        
+            // invariant: bit n is 1 iff dirty_tiles[n] nonzero.
+            uint64_t dirty_tile_rows;
+            
+            // any tiles in the tilemap that are dirty
+            // (screen 2 at indices >= 32)
+            uint32_t dirty_tiles[64];
+        #endif
+    #endif
 };
 
 /**
@@ -791,14 +795,20 @@ __shell uint8_t __gb_read_full(struct gb_s *gb, const uint_fast16_t addr)
 #if ENABLE_BGCACHE
 #if ENABLE_BGCACHE_DEFERRED
 
-__core_section("bgcache")
+// process changes to the bgcache later on, during rendering
+// (since we might update it multiple times before rendering)
+
+__core_section("bgdefer")
 void __gb_update_bgcache_tile_deferred(struct gb_s *restrict gb, int addr_mode, const int tmidx, const uint8_t tile)
 {
+    // TODO: use addr_mode field
+    PGB_ASSERT(tmidx < 0x800)
     int row = tmidx / 32;
     gb->dirty_tile_rows |= 1 << row;
     gb->dirty_tiles[row] |= 1 << (tmidx % 32);
 }
 
+__core_section("bgdefer")
 void __gb_update_bgcache_tile_data_deferred(struct gb_s *restrict gb, unsigned tile)
 {
     gb->dirty_tile_data_master = 1;
@@ -848,22 +858,22 @@ void __gb_update_bgcache_tile_data(struct gb_s *restrict gb, const unsigned tile
         // handle both tile addressing modes
         if (_t == tile % 256 && tile < 0x80)
         {
-            __gb_update_bgcache_tile(gb, 0, i, _t);
+            __gb_update_bgcache_tile_deferred(gb, 0, i, _t);
         }
         else if (_t == tile % 256 && tile >= 0x100)
         {
-            __gb_update_bgcache_tile(gb, 1, i, _t);
+            __gb_update_bgcache_tile_deferred(gb, 1, i, _t);
         }
         else if (_t == tile % 256)
         {
-            __gb_update_bgcache_tile(gb, 0, i, _t);
-            __gb_update_bgcache_tile(gb, 1, i, _t);
+            __gb_update_bgcache_tile_deferred(gb, 0, i, _t);
+            __gb_update_bgcache_tile_deferred(gb, 1, i, _t);
         }
     }
 }
 
 #if ENABLE_BGCACHE_DEFERRED
-__core_section("bgcache")
+__core_section("bgdefer")
 void __gb_process_deferred_tile_data_update(struct gb_s *restrict gb)
 {
     for (int i = 0; i < PEANUT_GB_ARRAYSIZE(gb->dirty_tile_data); ++i)
@@ -874,7 +884,9 @@ void __gb_process_deferred_tile_data_update(struct gb_s *restrict gb)
         {
             if unlikely(dirty & 1)
             {
-                __gb_update_bgcache_tile_data(gb, i);
+                const unsigned tile = (i*32) | j;
+                PGB_ASSERT(tile < 0x1800);
+                __gb_update_bgcache_tile_data(gb, tile);
             }
             dirty >>= 1;
         }
@@ -883,7 +895,7 @@ void __gb_process_deferred_tile_data_update(struct gb_s *restrict gb)
     gb->dirty_tile_data_master = 0;
 }
 
-__core_section("bgcache")
+__core_section("bgdefer")
 void __gb_process_deferred_tile_update(struct gb_s *restrict gb)
 {
     uint64_t d = gb->dirty_tile_rows;
@@ -1586,29 +1598,12 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             if (xm != 0)
                 raw |= (hi << (32 - xm));
             
-            uint32_t rm = 0;
+            uint32_t rm = raw;
             BG_REMAP(pal, raw, rm);
             *out = rm;
             
             // calculate priority
             uint32_t pp = raw | (raw >> 1);
-            /*uint16_t p = 0
-                | ((pp & (1 << 1)) >> 1)
-                | ((pp & (1 << 3)) >> 2)
-                | ((pp & (1 << 5)) >> 3)
-                | ((pp & (1 << 7)) >> 4)
-                | ((pp & (1 << 9)) >> 5)
-                | ((pp & (1 << 11)) >> 6)
-                | ((pp & (1 << 13)) >> 7)
-                | ((pp & (1 << 15)) >> 8)
-                | ((pp & (1 << 17)) >> 9)
-                | ((pp & (1 << 19)) >> 10)
-                | ((pp & (1 << 21)) >> 11)
-                | ((pp & (1 << 23)) >> 12)
-                | ((pp & (1 << 25)) >> 13)
-                | ((pp & (1 << 27)) >> 14)
-                | ((pp & (1 << 29)) >> 15)
-                | ((pp & (1 << 31)) >> 16);*/
             uint16_t p = 0;
             for (int j = 0; j < 16; ++j)
             {
@@ -4945,7 +4940,6 @@ done_instr:
                 gb->gb_reg.IF |= LCDC_INTR;
 
 #if ENABLE_LCD
-
             /* If frame skip is activated, check if we need to draw
              * the frame or skip it. */
             if (gb->direct.frame_skip)
@@ -5001,6 +4995,15 @@ done_instr:
 __core void gb_run_frame(struct gb_s *gb)
 {
     gb->gb_frame = 0;
+    
+    /*
+    // paranoid extra tile update
+    static int tick = 0;
+    tick = (tick+1) % 0x800;
+    int tile = gb->vram[0x1800 + tick];
+    __gb_update_bgcache_tile(gb, 0, tick, tile);
+    __gb_update_bgcache_tile(gb, 1, tick, tile);
+    */
 
     while (!gb->gb_frame)
     {
