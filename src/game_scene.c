@@ -1200,7 +1200,7 @@ static void PGB_GameScene_menu(void *object)
             memmove(rom_basename, last_slash + 1, strlen(last_slash + 1) + 1);
         }
 
-        const char *gamesPath = PGB_gamesPath;
+        const char *coversPath = PGB_coversPath;
         char *coverPath = NULL;
 
         char *basename = string_copy(rom_basename);
@@ -1226,7 +1226,7 @@ static void PGB_GameScene_menu(void *object)
         FileStat fileStat;
         bool found = false;
 
-        playdate->system->formatString(&coverPath, "%s/%s.pdi", gamesPath,
+        playdate->system->formatString(&coverPath, "%s/%s.pdi", coversPath,
                                        cleanName);
         if (playdate->file->stat(coverPath, &fileStat) == 0)
         {
@@ -1240,7 +1240,7 @@ static void PGB_GameScene_menu(void *object)
                 pgb_free(coverPath);
             }
 
-            playdate->system->formatString(&coverPath, "%s/%s.pdi", gamesPath,
+            playdate->system->formatString(&coverPath, "%s/%s.pdi", coversPath,
                                            basename);
         }
 
