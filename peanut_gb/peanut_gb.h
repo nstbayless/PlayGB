@@ -1605,6 +1605,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             // calculate priority
             uint32_t pp = raw | (raw >> 1);
             uint16_t p = 0;
+            #pragma GCC unroll 16
             for (int j = 0; j < 16; ++j)
             {
                 p |= (pp >> (j*2)) & 1;
