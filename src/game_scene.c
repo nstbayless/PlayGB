@@ -595,6 +595,9 @@ void update_fb_dirty_lines(uint8_t *restrict framebuffer,
                     pd_fb_target_byte0 +
                     PLAYDATE_ROW_STRIDE;  // Next Playdate row
                 p = 0;  // Reset p for the second row calculation
+                
+                // FIXME: why does this pragma cause a crash if unroll 4??
+                #pragma GCC unroll 2
                 for (int i = 0; i < 4; ++i)
                 {
                     p <<= 2;
