@@ -1732,8 +1732,8 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         if (obscure_x > 0)
         {
             // obscure background behind window
-            line_priority[bg_x/16] &= (0xFFFF >> (16-obscure_x));
-            ((uint32_t*)(void*)(pixels))[bg_x/16] &= 0xFFFFFFFF >> (2*(16 - obscure_x));
+            ((uint16_t*)line_priority)[wx/16] &= (0xFFFF >> obscure_x);
+            ((uint32_t*)(void*)(pixels))[wx/16] &= 0xFFFFFFFF >> (2*obscure_x);
         }
         
         for (int i = wx/16; i < (LCD_WIDTH)/16; ++i)
