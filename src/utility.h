@@ -35,6 +35,24 @@ extern const char *PGB_savesPath;
 extern const char *PGB_gamesPath;
 extern const char *PGB_coversPath;
 
+typedef enum
+{
+    PGB_COVER_ART_SUCCESS,
+    PGB_COVER_ART_ERROR_LOADING,
+    PGB_COVER_ART_INVALID_IMAGE,
+    PGB_COVER_ART_FILE_NOT_FOUND
+} PGB_CoverArtStatus;
+
+typedef struct
+{
+    LCDBitmap *bitmap;
+    int original_width;
+    int original_height;
+    int scaled_width;
+    int scaled_height;
+    PGB_CoverArtStatus status;
+} PGB_LoadedCoverArt;
+
 char *string_copy(const char *string);
 
 char *pgb_save_filename(const char *filename, bool isRecovery);
@@ -56,6 +74,14 @@ void pgb_free(void *ptr);
 size_t pgb_strlen(const char *s);
 char *pgb_strrchr(const char *s, int c);
 int pgb_strcmp(const char *s1, const char *s2);
+
+char *pgb_find_cover_art_path(const char *rom_basename_no_ext,
+                              const char *rom_clean_basename_no_ext);
+
+PGB_LoadedCoverArt pgb_load_and_scale_cover_art_from_path(
+    const char *cover_path, int max_target_width, int max_target_height);
+
+void pgb_free_loaded_cover_art_bitmap(PGB_LoadedCoverArt *art_result);
 
 #ifdef TARGET_PLAYDATE
 #define __section__(x) __attribute__((section(x)))

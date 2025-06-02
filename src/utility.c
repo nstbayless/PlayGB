@@ -148,6 +148,171 @@ void pgb_sort_games_array(PGB_Array *games_array)
     }
 }
 
+char *pgb_find_cover_art_path(const char *rom_basename_no_ext,
+                              const char *rom_clean_basename_no_ext)
+{
+    char *found_path = NULL;
+    FileStat fileStat;
+    char *path_attempt = NULL;
+
+    playdate->system->formatString(&path_attempt, "%s/%s.pdi", PGB_coversPath,
+                                   rom_clean_basename_no_ext);
+    if (path_attempt && playdate->file->stat(path_attempt, &fileStat) == 0)
+    {
+        found_path = path_attempt;
+    }
+    else
+    {
+        if (path_attempt)
+        {
+            pgb_free(path_attempt);
+            path_attempt = NULL;
+        }
+        playdate->system->formatString(&path_attempt, "%s/%s.pdi",
+                                       PGB_coversPath, rom_basename_no_ext);
+        if (path_attempt && playdate->file->stat(path_attempt, &fileStat) == 0)
+        {
+            found_path = path_attempt;
+        }
+        else
+        {
+            if (path_attempt)
+            {
+                pgb_free(path_attempt);
+            }
+        }
+    }
+    return found_path;
+}
+
+PGB_LoadedCoverArt pgb_load_and_scale_cover_art_from_path(
+    const char *cover_path, int max_target_width, int max_target_height)
+{
+    PGB_LoadedCoverArt result = {.bitmap = NULL,
+                                 .original_width = 0,
+                                 .original_height = 0,
+                                 .scaled_width = 0,
+                                 .scaled_height = 0,
+                                 .status = PGB_COVER_ART_FILE_NOT_FOUND};
+
+    if (!cover_path)
+    {
+        result.status = PGB_COVER_ART_FILE_NOT_FOUND;
+        return result;
+    }
+
+    FileStat fileStatCheck;
+    if (playdate->file->stat(cover_path, &fileStatCheck) != 0)
+    {
+        result.status = PGB_COVER_ART_FILE_NOT_FOUND;
+        return result;
+    }
+
+    char *error_str = NULL;
+    LCDBitmap *original_image =
+        playdate->graphics->loadBitmap(cover_path, &error_str);
+
+    if (error_str)
+    {
+        playdate->system->logToConsole(
+            "Error string from loadBitmap for %s: %s", cover_path, error_str);
+        pgb_free(error_str);
+    }
+
+    if (original_image == NULL)
+    {
+        result.status = PGB_COVER_ART_ERROR_LOADING;
+        playdate->system->logToConsole("Failed to load bitmap: %s", cover_path);
+        return result;
+    }
+
+    playdate->graphics->getBitmapData(original_image, &result.original_width,
+                                      &result.original_height, NULL, NULL,
+                                      NULL);
+
+    if (result.original_width <= 0 || result.original_height <= 0)
+    {
+        playdate->graphics->freeBitmap(original_image);
+        result.status = PGB_COVER_ART_INVALID_IMAGE;
+        playdate->system->logToConsole(
+            "Invalid image dimensions (%dx%d) for: %s", result.original_width,
+            result.original_height, cover_path);
+        return result;
+    }
+
+    float scale;
+    float scaleX = (float)max_target_width / result.original_width;
+    float scaleY = (float)max_target_height / result.original_height;
+    scale = (scaleX < scaleY) ? scaleX : scaleY;
+
+    result.scaled_width = (int)roundf(result.original_width * scale);
+    result.scaled_height = (int)roundf(result.original_height * scale);
+
+    if (result.scaled_width < 1 && result.original_width > 0)
+        result.scaled_width = 1;
+    if (result.scaled_height < 1 && result.original_height > 0)
+        result.scaled_height = 1;
+
+    bool perform_scaling_operation = false;
+    if (result.scaled_width != result.original_width ||
+        result.scaled_height != result.original_height)
+    {
+        perform_scaling_operation = true;
+    }
+
+    if (perform_scaling_operation)
+    {
+        if (result.scaled_width <= 0 || result.scaled_height <= 0)
+        {
+            playdate->system->logToConsole(
+                "Error: Calculated scaled dimensions are zero or negative "
+                "(%dx%d) for %s. Original: %dx%d, Scale: %f",
+                result.scaled_width, result.scaled_height, cover_path,
+                result.original_width, result.original_height, scale);
+            playdate->graphics->freeBitmap(original_image);
+            result.status = PGB_COVER_ART_INVALID_IMAGE;
+            return result;
+        }
+
+        LCDBitmap *scaled_bitmap = playdate->graphics->newBitmap(
+            result.scaled_width, result.scaled_height, kColorClear);
+        if (scaled_bitmap == NULL)
+        {
+            playdate->graphics->freeBitmap(original_image);
+            result.status = PGB_COVER_ART_ERROR_LOADING;
+            playdate->system->logToConsole(
+                "Failed to create new scaled bitmap (%dx%d) for: %s",
+                result.scaled_width, result.scaled_height, cover_path);
+            return result;
+        }
+
+        playdate->graphics->pushContext(scaled_bitmap);
+        playdate->graphics->setDrawMode(kDrawModeCopy);
+        playdate->graphics->drawScaledBitmap(original_image, 0, 0, scale,
+                                             scale);
+        playdate->graphics->popContext();
+
+        playdate->graphics->freeBitmap(original_image);
+        result.bitmap = scaled_bitmap;
+    }
+    else
+    {
+        result.bitmap = original_image;
+    }
+
+    result.status = PGB_COVER_ART_SUCCESS;
+    return result;
+}
+
+void pgb_free_loaded_cover_art_bitmap(PGB_LoadedCoverArt *art_result)
+{
+    if (art_result && art_result->bitmap)
+    {
+        playdate->graphics->freeBitmap(art_result->bitmap);
+        art_result->bitmap = NULL;
+    }
+}
+
 void pgb_fillRoundRect(PDRect rect, int radius, LCDColor color)
 {
     int r2 = radius * 2;

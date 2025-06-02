@@ -1190,28 +1190,29 @@ static void PGB_GameScene_didToggleLCD(void *userdata)
 static void PGB_GameScene_menu(void *object)
 {
     PGB_GameScene *gameScene = object;
+    playdate->system->removeAllMenuItems();
 
     if (gameScene->rom_filename != NULL)
     {
-        char *rom_basename = string_copy(gameScene->rom_filename);
-        char *last_slash = strrchr(rom_basename, '/');
+        char *rom_basename_full = string_copy(gameScene->rom_filename);
+        char *filename_part = rom_basename_full;
+        char *last_slash = strrchr(rom_basename_full, '/');
         if (last_slash != NULL)
         {
-            memmove(rom_basename, last_slash + 1, strlen(last_slash + 1) + 1);
+            filename_part = last_slash + 1;
         }
 
-        const char *coversPath = PGB_coversPath;
-        char *coverPath = NULL;
+        char *rom_basename_ext = string_copy(filename_part);
 
-        char *basename = string_copy(rom_basename);
-        char *ext = strrchr(basename, '.');
+        char *basename_no_ext = string_copy(rom_basename_ext);
+        char *ext = strrchr(basename_no_ext, '.');
         if (ext != NULL)
         {
             *ext = '\0';
         }
 
-        char *cleanName = string_copy(basename);
-        char *p = cleanName;
+        char *cleanName_no_ext = string_copy(basename_no_ext);
+        char *p = cleanName_no_ext;
         while (*p)
         {
             if (*p == ' ' || *p == '(' || *p == ')' || *p == '[' || *p == ']' ||
@@ -1223,87 +1224,54 @@ static void PGB_GameScene_menu(void *object)
             p++;
         }
 
-        FileStat fileStat;
-        bool found = false;
+        char *actual_cover_path =
+            pgb_find_cover_art_path(basename_no_ext, cleanName_no_ext);
 
-        playdate->system->formatString(&coverPath, "%s/%s.pdi", coversPath,
-                                       cleanName);
-        if (playdate->file->stat(coverPath, &fileStat) == 0)
+        if (actual_cover_path != NULL)
         {
-            found = true;
-        }
+            PGB_LoadedCoverArt cover_art =
+                pgb_load_and_scale_cover_art_from_path(actual_cover_path, 200,
+                                                       200);
 
-        if (!found)
-        {
-            if (coverPath != NULL)
+            if (cover_art.status == PGB_COVER_ART_SUCCESS &&
+                cover_art.bitmap != NULL)
             {
-                pgb_free(coverPath);
-            }
-
-            playdate->system->formatString(&coverPath, "%s/%s.pdi", coversPath,
-                                           basename);
-        }
-
-        if (coverPath != NULL &&
-            playdate->file->stat(coverPath, &fileStat) == 0)
-        {
-            LCDBitmap *originalImage =
-                playdate->graphics->loadBitmap(coverPath, NULL);
-            if (originalImage != NULL)
-            {
-                int originalWidth, originalHeight;
-                playdate->graphics->getBitmapData(originalImage, &originalWidth,
-                                                  &originalHeight, NULL, NULL,
-                                                  NULL);
-
                 LCDBitmap *menuImage =
                     playdate->graphics->newBitmap(400, 240, kColorClear);
                 if (menuImage != NULL)
                 {
-                    int targetWidth = 200;
-                    int targetHeight = 200;
-                    float scale = 1.0f;
+                    int final_scaled_width = cover_art.scaled_width;
+                    int final_scaled_height = cover_art.scaled_height;
 
-                    if (originalWidth > 0 && originalHeight > 0)
+                    int drawX = (200 - final_scaled_width) / 2;
+                    if (drawX < 0)
                     {
-                        float scaleX = (float)targetWidth / originalWidth;
-                        float scaleY = (float)targetHeight / originalHeight;
-                        scale = scaleX < scaleY ? scaleX : scaleY;
+                        drawX = 0;
                     }
 
-                    int scaledWidth = originalWidth * scale;
-                    int scaledHeight = originalHeight * scale;
-
-                    int drawX = (targetWidth - scaledWidth) / 2;
-                    int drawY = 40 + (160 - scaledHeight) / 2;
+                    int drawY = 40 + (160 - final_scaled_height) / 2;
 
                     playdate->graphics->pushContext(menuImage);
+                    playdate->graphics->setDrawMode(kDrawModeCopy);
 
                     playdate->graphics->fillRect(0, 0, 400, 40, kColorBlack);
                     playdate->graphics->fillRect(0, 200, 400, 40, kColorBlack);
 
-                    playdate->graphics->drawScaledBitmap(originalImage, drawX,
-                                                         drawY, scale, scale);
+                    playdate->graphics->drawBitmap(cover_art.bitmap, drawX,
+                                                   drawY, kBitmapUnflipped);
+
                     playdate->graphics->popContext();
-
-                    playdate->system->logToConsole(
-                        "Setting menu image: %s (scaled to 400x240)",
-                        coverPath);
                     playdate->system->setMenuImage(menuImage, 0);
-                    playdate->graphics->freeBitmap(menuImage);
                 }
-
-                playdate->graphics->freeBitmap(originalImage);
+                pgb_free_loaded_cover_art_bitmap(&cover_art);
             }
+            pgb_free(actual_cover_path);
         }
 
-        pgb_free(cleanName);
-        pgb_free(basename);
-        pgb_free(rom_basename);
-        if (coverPath != NULL)
-        {
-            pgb_free(coverPath);
-        }
+        pgb_free(cleanName_no_ext);
+        pgb_free(basename_no_ext);
+        pgb_free(rom_basename_ext);
+        pgb_free(rom_basename_full);
     }
 
     playdate->system->addMenuItem("Library", PGB_GameScene_didSelectLibrary,
