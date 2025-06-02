@@ -205,9 +205,6 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 
         if (gb_ret == GB_INIT_NO_ERROR)
         {
-            playdate->system->logToConsole(
-                    "Cartridge Type 0x%02X (MBC %d)",
-                    gb->cartridge_type, (int)gb->mbc);
             char *save_filename = pgb_save_filename(rom_filename, false);
             gameScene->save_filename = save_filename;
 
@@ -217,10 +214,13 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
             context->gb->gb_cart_ram = context->cart_ram;
             context->gb->gb_cart_ram_size = gb_get_save_size(context->gb);
 
-            if (context->gb->mbc_flags.rtc)
+            uint8_t actual_cartridge_type = context->gb->gb_rom[0x0147];
+            if (actual_cartridge_type == 0x0F || actual_cartridge_type == 0x10)
             {
                 gameScene->cartridge_has_rtc = true;
-                playdate->system->logToConsole("RTC enabled");
+                playdate->system->logToConsole(
+                    "Cartridge Type 0x%02X: RTC Enabled.",
+                    actual_cartridge_type);
 
                 // Initialize Playdate-side RTC tracking variables
                 gameScene->rtc_time =
@@ -245,6 +245,9 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
             else
             {
                 gameScene->cartridge_has_rtc = false;
+                playdate->system->logToConsole(
+                    "Cartridge Type 0x%02X (MBC: %d): RTC Disabled.",
+                    actual_cartridge_type, context->gb->mbc);
             }
 
             audio_init(gb->hram + 0x10);
@@ -481,13 +484,10 @@ static void gb_error(struct gb_s *gb, const enum gb_error_e gb_err,
             "%s:%i: Invalid opcode %#04x at PC: %#06x, SP: %#06x", __FILE__,
             __LINE__, val, gb->cpu_reg.pc - 1, gb->cpu_reg.sp);
     }
-    else if (gb_err == GB_INVALID_READ)
+    else if (gb_err == GB_INVALID_READ || gb_err == GB_INVALID_WRITE)
     {
-        playdate->system->logToConsole("ERROR: Invalid read, addr %04x", val);
-    }
-    else if (gb_err == GB_INVALID_WRITE)
-    {
-        playdate->system->logToConsole("ERROR: Invalid write, addr %04x", val);
+        playdate->system->logToConsole("%s:%i: Invalid read / write", __FILE__,
+                                       __LINE__);
     }
     else
     {

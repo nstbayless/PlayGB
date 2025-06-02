@@ -50,59 +50,6 @@
 #include "../src/utility.h"
 #include "version.all" /* Version information */
 
-// memory-bank controllers
-#define MBC_NONE 0
-#define MBC_1 1
-#define MBC_2 2
-#define MBC_3 3
-#define MBC_MM01 4
-#define MBC_5 5
-#define MBC_6 6
-#define MBC_7 7
-#define MBC_HuC1 8
-#define MBC_HuC3 9
-
-// cartridge types
-#define CT_MBC_ROM 0
-
-#define CT_MBC_1 1
-#define CT_MBC_1_RAM 2
-#define CT_MBC_1_RAM_BATTERY 3
-
-#define CT_MBC_2 5
-#define CT_MBC_2_BATTERY 6
-
-#define CT_MBC_ROM_RAM 8
-#define CT_MBC_ROM_RAM_BATTERY 9
-
-#define CT_MBC_MMM01 0xB
-#define CT_MBC_MMM01_RAM 0xC
-#define CT_MBC_MMM01_RAM_BATTERY 0xD
-
-#define CT_MBC_3_TIMER_BATTERY 0xF
-#define CT_MBC_3_TIMER_RAM_BATTERY 0x10
-#define CT_MBC_3 0x11
-#define CT_MBC_3_RAM 0x12
-#define CT_MBC_3_RAM_BATTERY 0x13
-
-#define CT_MBC_5 0x19
-#define CT_MBC_5_RAM 0x1A
-#define CT_MBC_5_RAM_BATTERY 0x1B
-#define CT_MBC_5_RUMBLE 0x1C
-#define CT_MBC_5_RUMBLE_RAM 0x1D
-#define CT_MBC_5_RUMBLE_RAM_BATTERY 0x1E
-
-#define CT_MBC_6 0x20
-
-#define CT_MBC_7_SENSOR_RUMBLE_RAM_BATTERY 0x22
-
-#define CT_MBC_POCKET_CAMERA 0xFC
-#define CT_MBC_BANDAI_TAMA5 0xFD
-#define CT_MBC_HuC3 0xFE
-#define CT_MBC_HuC1 0xFF
-#define CT_MBC_HuC1_RAM_BATTERY 0xFF
-
-
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -463,25 +410,13 @@ struct gb_s
         uint8_t lcd_mode : 2;
         uint8_t lcd_blank : 1;
         uint8_t lcd_master_enable : 1;
-        
-        uint8_t dirty_tile_data_master : 1;
     };
 
     /* Cartridge information:
      * Memory Bank Controller (MBC) type. */
-    u8 mbc;
-    
-    // any CT_ variable
-    u8 cartridge_type;
-    
-    struct {
-        u8 ram : 1;
-        u8 battery : 1;
-        u8 rtc : 1; // real-time clock
-        u8 rumble : 1;
-        u8 accelerometer : 1;
-    } mbc_flags;
-    
+    uint8_t mbc;
+    /* Whether the MBC has internal RAM. */
+    uint8_t cart_ram;
     /* Number of ROM banks in cartridge. */
     uint16_t num_rom_banks_mask;
     /* Number of RAM banks in cartridge. */
@@ -493,11 +428,8 @@ struct gb_s
     uint8_t enable_cart_ram;
     /* Cartridge ROM/RAM mode select. */
     uint8_t cart_mode_select;
-    
-    // mbc-specific data
     union
     {
-        // real-time clock (RTC)
         struct
         {
             uint8_t sec;
@@ -602,6 +534,7 @@ struct gb_s
     uint8_t *bgcache;
 
 #if ENABLE_BGCACHE_DEFERRED
+    bool dirty_tile_data_master : 1;
     uint32_t dirty_tile_data[0x180 / 32];
 
     // invariant: bit n is 1 iff dirty_tiles[n] nonzero.
@@ -713,7 +646,7 @@ __shell uint8_t __gb_read_full(struct gb_s *gb, const uint_fast16_t addr)
 
     case 0xA:
     case 0xB:
-        if (gb->mbc_flags.ram && gb->enable_cart_ram)
+        if (gb->cart_ram && gb->enable_cart_ram)
         {
             if (gb->mbc == 3 && gb->cart_ram_bank >= 0x08)
                 return gb->cart_rtc[gb->cart_ram_bank - 0x08];
@@ -1035,7 +968,7 @@ __shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
     case 0x1:
         if (gb->mbc == 2 && addr & 0x10)
             return;
-        else if (gb->mbc > 0 && gb->mbc_flags.ram)
+        else if (gb->mbc > 0 && gb->cart_ram)
             gb->enable_cart_ram = ((val & 0x0F) == 0x0A);
 
         return;
@@ -1117,7 +1050,7 @@ __shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
 
     case 0xA:
     case 0xB:
-        if (gb->mbc_flags.ram && gb->enable_cart_ram)
+        if (gb->cart_ram && gb->enable_cart_ram)
         {
             if (gb->mbc == 3 && gb->cart_ram_bank >= 0x08)
                 gb->cart_rtc[gb->cart_ram_bank - 0x08] = val;
@@ -5304,9 +5237,8 @@ enum gb_init_error_e gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram,
     /* clang-format off */
     const uint8_t cart_mbc[] =
     {
-        MBC_NONE, MBC_1, MBC_1, MBC_1, -1,  MBC_2,  MBC_2, -1, MBC_NONE, MBC_NONE, -1, MBC_MM01, MBC_MM01, MBC_MM01, -1,  MBC_3,
-        MBC_3, MBC_3, MBC_3, MBC_3, -1, -1, -1, -1, -1, MBC_5,  MBC_5, MBC_5, MBC_5, MBC_5,  MBC_5, -1,
-        MBC_6, -1, MBC_7,
+        0, 1, 1, 1, -1,  2,  2, -1,  0, 0, -1, 0, 0, 0, -1,  3,
+        3, 3, 3, 3, -1, -1, -1, -1, -1, 5,  5, 5, 5, 5,  5, -1
     };
     const uint8_t cart_ram[] =
     {
@@ -5355,60 +5287,13 @@ enum gb_init_error_e gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram,
     /* Check if cartridge type is supported, and set MBC type. */
     {
         const uint8_t mbc_value = gb->gb_rom[mbc_location];
-        gb->cartridge_type = mbc_value;
 
-        if (mbc_value >= sizeof(cart_mbc) ||
+        if (mbc_value > sizeof(cart_mbc) - 1 ||
             (gb->mbc = cart_mbc[mbc_value]) == 255u)
             return GB_INIT_CARTRIDGE_UNSUPPORTED;
     }
-    
-    // battery
-    switch (gb->gb_rom[mbc_location])
-    {
-    default: break;
-    case CT_MBC_1_RAM_BATTERY:
-    case CT_MBC_2_BATTERY:
-    case CT_MBC_ROM_RAM_BATTERY:
-    case CT_MBC_MMM01_RAM_BATTERY:
-    case CT_MBC_3_TIMER_BATTERY:
-    case CT_MBC_3_TIMER_RAM_BATTERY:
-    case CT_MBC_5_RAM_BATTERY:
-    case CT_MBC_5_RUMBLE_RAM_BATTERY:
-    case CT_MBC_7_SENSOR_RUMBLE_RAM_BATTERY:
-    case CT_MBC_HuC1_RAM_BATTERY:
-        gb->mbc_flags.battery = 1;
-    }
-    
-    // rumble
-    switch (gb->gb_rom[mbc_location])
-    {
-    default: break;
-    case CT_MBC_5_RUMBLE:
-    case CT_MBC_5_RUMBLE_RAM:
-    case CT_MBC_5_RUMBLE_RAM_BATTERY:
-    case CT_MBC_7_SENSOR_RUMBLE_RAM_BATTERY:
-        gb->mbc_flags.rumble = 1;
-    }
-    
-    // timer
-    switch (gb->gb_rom[mbc_location])
-    {
-    default: break;
-    case CT_MBC_3_TIMER_BATTERY:
-    case CT_MBC_3_TIMER_RAM_BATTERY:
-    case CT_MBC_HuC3:
-        gb->mbc_flags.rtc = 1;
-    }
-    
-    // accelerometer
-    switch (gb->gb_rom[mbc_location])
-    {
-    default: break;
-    case CT_MBC_7_SENSOR_RUMBLE_RAM_BATTERY:
-        gb->mbc_flags.accelerometer = 1;
-    }
 
-    gb->mbc_flags.ram = cart_ram[gb->gb_rom[mbc_location]];
+    gb->cart_ram = cart_ram[gb->gb_rom[mbc_location]];
     gb->num_rom_banks_mask =
         num_rom_banks_mask[gb->gb_rom[bank_count_location]] - 1;
     gb->num_ram_banks = num_ram_banks[gb->gb_rom[ram_size_location]];
