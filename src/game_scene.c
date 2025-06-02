@@ -62,17 +62,17 @@ static const char *startButtonText = "start";
 static const char *selectButtonText = "select";
 
 
-static const uint32_t PGB_dither_lut_c0 = 0
-    | (0b11111111 << 0)
-    | (0b01110111 << 8)
-    | (0b00010001 << 16)
-    | (0b00000000 << 24);
+static const uint16_t PGB_dither_lut_c0 = 0
+    | (0b1111 << 0)
+    | (0b0111 << 4)
+    | (0b0001 << 8)
+    | (0b0000 << 12);
 
-static const uint32_t PGB_dither_lut_c1 = 0
-    | (0b11111111 << 0)
-    | (0b11011101 << 8)
-    | (0b01000100 << 16)
-    | (0b00000000 << 24);
+static const uint16_t PGB_dither_lut_c1 = 0
+    | (0b1111 << 0)
+    | (0b1101 << 4)
+    | (0b0100 << 8)
+    | (0b0000 << 12);
 
 static uint8_t PGB_bitmask[4][4][4];
 static bool PGB_GameScene_bitmask_done = false;
@@ -532,8 +532,7 @@ void update_fb_dirty_lines(uint8_t *restrict framebuffer,
     unsigned fb_y_playdate_current_bottom =
         PGB_LCD_Y + PGB_LCD_HEIGHT;  // Bottom of drawable area on Playdate
         
-    uint32_t dither_lut_c0 = PGB_dither_lut_c0;
-    uint32_t dither_lut_c1 = PGB_dither_lut_c1;
+    uint32_t dither_lut = PGB_dither_lut_c0 | ((uint32_t)PGB_dither_lut_c1 << 16);
 
     for (int y_gb = LCD_HEIGHT;
          y_gb --> 0;)  // y_gb is Game Boy line index from top, 143 down to 0
@@ -546,9 +545,7 @@ void update_fb_dirty_lines(uint8_t *restrict framebuffer,
             
             // swap dither pattern on each half-row;
             // yields smoother results
-            uint32_t swap = dither_lut_c0;
-            dither_lut_c0 = dither_lut_c1;
-            dither_lut_c1 = swap;
+            dither_lut = (dither_lut >> 16) | (dither_lut << 16);
         }
 
         // Calculate the Playdate Y position for the *top* of the current GB
@@ -580,8 +577,8 @@ void update_fb_dirty_lines(uint8_t *restrict framebuffer,
             for (int i = 0; i < 4; ++i)
             {  // Unpack 4 GB pixels from the byte
                 p <<= 2;
-                unsigned c0h = dither_lut_c0 >> ((pixels_temp_c0 & 3) * 8);
-                unsigned c0 = (c0h >> (i*2)) & 3;
+                unsigned c0h = dither_lut >> ((pixels_temp_c0 & 3) * 4);
+                unsigned c0 = (c0h >> ((i*2) % 4)) & 3;
                 p |= c0;
                 pixels_temp_c0 >>= 2;
             }
@@ -600,8 +597,8 @@ void update_fb_dirty_lines(uint8_t *restrict framebuffer,
                 for (int i = 0; i < 4; ++i)
                 {
                     p <<= 2;
-                    unsigned c1h = dither_lut_c1 >> ((pixels_temp_c1 & 3) * 8);
-                    unsigned c1 = (c1h >> (i*2)) & 3;
+                    unsigned c1h = dither_lut >> ((pixels_temp_c1 & 3) * 4 + 16);
+                    unsigned c1 = (c1h >> ((i*2) % 4)) & 3;
                     p |= c1;
                     pixels_temp_c1 >>= 2;
                 }

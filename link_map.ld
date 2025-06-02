@@ -41,7 +41,7 @@ SECTIONS
 		*(.itcm)
 		. = ALIGN(32);
 		*(.itcm.draw)
-		. = ALIGN(32); . += 0x02;
+		. = ALIGN(32); . += 0x12;
 		*(.itcm.fb)
 		. = ALIGN(32); . += 0x6;
 		*(.itcm.cb)
