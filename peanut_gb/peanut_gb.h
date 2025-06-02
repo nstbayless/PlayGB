@@ -804,7 +804,7 @@ void __gb_update_bgcache_tile_deferred(struct gb_s *restrict gb, int addr_mode, 
     // TODO: use addr_mode field
     PGB_ASSERT(tmidx < 0x800)
     int row = tmidx / 32;
-    gb->dirty_tile_rows |= 1 << row;
+    gb->dirty_tile_rows |= (uint64_t)1 << row;
     gb->dirty_tiles[row] |= 1 << (tmidx % 32);
 }
 
@@ -1569,6 +1569,10 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         }
     }
     
+    // clear row
+    for (int i = 0; i < LCD_WIDTH/16; ++i)
+        ((uint32_t*)pixels)[i] = 0;
+    
     #define BG_REMAP(pal, t1, t2, v) \
         do {uint32_t t2_ = ((uint32_t)t2) << 1; \
         for (int _q = 0; _q < 16; _q ++) { \
@@ -1692,6 +1696,43 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
     /* draw window */
     if (wx < LCD_WIDTH)
     {
+        #if ENABLE_BGCACHE
+        uint8_t bg_x = wx; // CHECKME -- does window scroll? Should this be 0?
+        uint8_t bg_y = gb->gb_reg.LY - gb->display.WY;
+        int addr_mode_2 = !(gb->gb_reg.LCDC & LCDC_TILE_SELECT);
+        int map2 = !!(gb->gb_reg.LCDC & LCDC_WINDOW_MAP);
+        uint32_t* bgcache = (uint32_t*)(
+            gb->bgcache + (bg_y*BGCACHE_STRIDE) + addr_mode_2*(BGCACHE_SIZE/2) + map2*(BGCACHE_SIZE/4)
+        );
+        uint8_t pal = gb->gb_reg.BGP;
+        uint32_t hi = bgcache[(bg_x/16) % 0x10];
+        
+        // first part of window may be obscured
+        const int obscure_x = bg_x % 16;
+        hi &= 0xFFFF0000 | (0x0000FFFF << obscure_x);
+        hi &= 0x0000FFFF | (0xFFFF0000 << obscure_x);
+        
+        for (int i = wx/16; i < (LCD_WIDTH)/16; ++i)
+        {
+            uint32_t* out = (uint32_t*)(void*)(pixels) + i;
+            uint32_t lo = hi;
+            hi = bgcache[(bg_x/16 + i + 1) % 0x10];
+            int xm = (bg_x % 16);
+            uint16_t raw1 = ((lo & 0x0000FFFF) >> xm);
+            uint16_t raw2 = ((lo & 0xFFFF0000) >> (16 + xm));
+            raw1 |= ((hi & 0x0000FFFF) << (16 - xm));
+            raw2 |= ((hi & 0xFFFF0000) >> xm);
+            
+            uint32_t rm = 0;
+            #pragma GCC unroll 16
+            BG_REMAP(pal, raw1, raw2, rm);
+            *out |= rm;
+            
+            // calculate priority
+            uint16_t p = raw1 | raw2;
+            *((uint16_t*)line_priority + i) |= p^0xFFFF;
+        }
+    #else
         /* Calculate Window Map Address. */
         uint16_t win_line =
             (gb->gb_reg.LCDC & LCDC_WINDOW_MAP) ? VRAM_BMAP_2 : VRAM_BMAP_1;
@@ -1765,8 +1806,9 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             line_priority[disp_x / 32] &= 0xFFFFFFFF << (disp_x % 32);
             line_priority[disp_x / 32] |= priority_bits;
         }
-
+        
         gb->display.window_clear++;  // advance window line
+        #endif
     }
 
     // draw sprites
@@ -5000,8 +5042,10 @@ __core void gb_run_frame(struct gb_s *gb)
 {
     gb->gb_frame = 0;
     
+    
     /*
     // paranoid extra tile update
+    // if this does anything, indicates bgcache isn't being updated correctly
     static int tick = 0;
     tick = (tick+1) % 0x800;
     int tile = gb->vram[0x1800 + tick];
