@@ -139,6 +139,25 @@ int pgb_compare_games_by_display_name(const void *a, const void *b)
     return strcmp(gameA->displayName, gameB->displayName);
 }
 
+void pgb_sanitize_string_for_filename(char *str)
+{
+    if (str == NULL)
+    {
+        return;
+    }
+    char *p = str;
+    while (*p)
+    {
+        if (*p == ' ' || *p == '(' || *p == ')' || *p == '[' || *p == ']' ||
+            *p == '{' || *p == '}' || *p == '!' || *p == '?' || *p == ':' ||
+            *p == ';' || *p == ',' || *p == '&' || *p == '\'')
+        {
+            *p = '_';
+        }
+        p++;
+    }
+}
+
 void pgb_sort_games_array(PGB_Array *games_array)
 {
     if (games_array != NULL && games_array->length > 1)

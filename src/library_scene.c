@@ -411,17 +411,7 @@ PGB_Game *PGB_Game_new(const char *filename)
     game->displayName = string_copy(basename_no_ext);
 
     char *cleanName_no_ext = string_copy(basename_no_ext);
-    char *p = cleanName_no_ext;
-    while (*p)
-    {
-        if (*p == ' ' || *p == '(' || *p == ')' || *p == '[' || *p == ']' ||
-            *p == '{' || *p == '}' || *p == '!' || *p == '?' || *p == ':' ||
-            *p == ';' || *p == ',' || *p == '&' || *p == '\'')
-        {
-            *p = '_';
-        }
-        p++;
-    }
+    pgb_sanitize_string_for_filename(cleanName_no_ext);
 
     game->coverPath =
         pgb_find_cover_art_path(basename_no_ext, cleanName_no_ext);
