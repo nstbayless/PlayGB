@@ -1598,7 +1598,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
     } while (0)
 
     /* If background is enabled, draw it. */
-    if ((gb->gb_reg.LCDC & LCDC_BG_ENABLE))
+    if ((gb->gb_reg.LCDC & LCDC_BG_ENABLE) && wx > 0)
     {
         /* Calculate current background line to draw. Constant because
          * this function draws only this one line each time it is
@@ -1727,8 +1727,14 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         const int obscure_x = bg_x % 16;
         hi &= 0xFFFF0000 | (0x0000FFFF << obscure_x);
         hi &= 0x0000FFFF | (0xFFFF0000 << obscure_x);
-
-        for (int i = wx / 16; i < (LCD_WIDTH) / 16; ++i)
+        if (obscure_x > 0)
+        {
+            // obscure background behind window
+            line_priority[bg_x/16] &= (0xFFFF >> (16-obscure_x));
+            ((uint32_t*)(void*)(pixels))[bg_x/16] &= 0xFFFFFFFF >> (2*(16 - obscure_x));
+        }
+        
+        for (int i = wx/16; i < (LCD_WIDTH)/16; ++i)
         {
             uint32_t *out = (uint32_t *)(void *)(pixels) + i;
             uint32_t lo = hi;

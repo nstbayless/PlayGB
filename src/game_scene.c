@@ -736,7 +736,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 #ifdef DTCM_ALLOC
         ITCM_CORE_FN(gb_run_frame)(context->gb);
 #else
-        // copy gb to DTCM temporarily
+        // copy gb to stack (DTCM) temporarily
         struct gb_s gb;
         memcpy(&gb, context->gb, sizeof(struct gb_s));
 
