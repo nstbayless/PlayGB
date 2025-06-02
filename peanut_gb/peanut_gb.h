@@ -820,6 +820,16 @@ void __gb_update_bgcache_tile_data_deferred(struct gb_s *restrict gb, unsigned t
 #define __gb_update_bgcache_tile_data_deferred __gb_update_bgcache_tile_data
 #endif
 
+// https://stackoverflow.com/a/2602885
+__core_section("bgcache")
+u8 reverse_bits_u8(u8 b)
+{
+    b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+    b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+    b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+    return b;
+}
+
 // tile data was changed, so we need to redraw this tile where it appears in the tilemap
 // tmidx: index of tile in map to update. (0x400+ is the second map.)
 __core_section("bgcache")
@@ -837,9 +847,9 @@ void __gb_update_bgcache_tile(struct gb_s *restrict gb, int addr_mode, const int
         unsigned t2 = vram[tile_data_addr + 2*tline + 1];
         
         // bgcache format: each 32 bits is a pair of 16 bit low color, 16 bit hi color
-        uint8_t* t = &bgcache[(tx/2)*4 + y*BGCACHE_STRIDE + !(tx%2)];
-        t[0] = t1;
-        t[2] = t2;
+        uint8_t* t = &bgcache[(tx/2)*4 + y*BGCACHE_STRIDE + (tx%2)];
+        t[0] = reverse_bits_u8(t1);
+        t[2] = reverse_bits_u8(t2);
     }
 }
 
@@ -1564,8 +1574,8 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         for (int _q = 0; _q < 16; _q ++) { \
             int p = ((t1 >> _q) &1) | ((t2_ >> _q) & 2); \
             int c = (pal >> (2*p)) & 3; \
-            v <<= 2; \
-            v |= c; \
+            v >>= 2; \
+            v |= c << 30; \
         }} while(0)
 
     /* If background is enabled, draw it. */
@@ -1591,10 +1601,10 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             uint32_t lo = hi;
             hi = bgcache[(bg_x/16 + i + 1) % 0x10];
             int xm = (bg_x % 16);
-            uint16_t raw1 = ((lo & 0x0000FFFF) << xm);
-            uint16_t raw2 = ((lo & 0xFFFF0000) >> (16 - xm));
-            raw1 |= ((hi & 0x0000FFFF) >> (16 - xm));
-            raw2 |= ((hi & 0xFFFF0000) >> (32 - xm));
+            uint16_t raw1 = ((lo & 0x0000FFFF) >> xm);
+            uint16_t raw2 = ((lo & 0xFFFF0000) >> (16 + xm));
+            raw1 |= ((hi & 0x0000FFFF) << (16 - xm));
+            raw2 |= ((hi & 0xFFFF0000) >> xm);
             
             uint32_t rm = 0;
             #pragma GCC unroll 16
