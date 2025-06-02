@@ -1599,6 +1599,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
                 raw |= (hi << (32 - xm));
             
             uint32_t rm = raw;
+            #pragma GCC unroll 16
             BG_REMAP(pal, raw, rm);
             *out = rm;
             
