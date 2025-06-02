@@ -1580,6 +1580,11 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         {
             wx = gb->gb_reg.WX - 7;
         }
+        else
+        {
+            // is this right? Works for link's awakening.
+            wx = 0;
+        }
     }
 
     // clear row
