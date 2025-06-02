@@ -574,6 +574,7 @@ void update_fb_dirty_lines(uint8_t *restrict framebuffer,
             uint8_t pixels_temp_c0 = orgpixels;
             unsigned p = 0;
 
+            #pragma GCC unroll 4
             for (int i = 0; i < 4; ++i)
             {  // Unpack 4 GB pixels from the byte
                 p <<= 2;
