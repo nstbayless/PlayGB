@@ -22,6 +22,8 @@ static PDMenuItem *frameSkipMenuItem;
 
 PGB_LibraryScene *PGB_LibraryScene_new(void)
 {
+    playdate->system->setCrankSoundsDisabled(false);
+    
     PGB_Scene *scene = PGB_Scene_new();
 
     PGB_LibraryScene *libraryScene = pgb_malloc(sizeof(PGB_LibraryScene));
