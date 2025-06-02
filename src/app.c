@@ -22,6 +22,7 @@ void PGB_init(void)
     PGB_App->pendingScene = NULL;
 
     playdate->file->mkdir("games");
+    playdate->file->mkdir("covers");
     playdate->file->mkdir("saves");
 
     preferences_init();

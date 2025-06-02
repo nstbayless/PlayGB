@@ -33,6 +33,7 @@ extern const uint8_t PGB_patterns[4][4][4];
 
 extern const char *PGB_savesPath;
 extern const char *PGB_gamesPath;
+extern const char *PGB_coversPath;
 
 char *string_copy(const char *string);
 

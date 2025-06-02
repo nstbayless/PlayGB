@@ -16,6 +16,7 @@ PlaydateAPI *playdate;
 
 const char *PGB_savesPath = "saves";
 const char *PGB_gamesPath = "games";
+const char *PGB_coversPath = "covers";
 
 /* clang-format off */
 const clalign uint8_t PGB_patterns[4][4][4] = {

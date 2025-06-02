@@ -496,7 +496,7 @@ PGB_Game *PGB_Game_new(const char *filename)
     FileStat fileStat;
     bool found = false;
 
-    playdate->system->formatString(&coverPath, "%s/%s.pdi", PGB_gamesPath,
+    playdate->system->formatString(&coverPath, "%s/%s.pdi", PGB_coversPath,
                                    cleanName);
     if (playdate->file->stat(coverPath, &fileStat) == 0)
     {
@@ -512,7 +512,7 @@ PGB_Game *PGB_Game_new(const char *filename)
             pgb_free(coverPath);
         }
 
-        playdate->system->formatString(&coverPath, "%s/%s.pdi", PGB_gamesPath,
+        playdate->system->formatString(&coverPath, "%s/%s.pdi", PGB_coversPath,
                                        basename);
         playdate->system->logToConsole("Using PDI with original name: %s",
                                        coverPath);
