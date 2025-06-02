@@ -527,8 +527,10 @@ struct gb_s
         /* Implementation defined data. Set to NULL if not required. */
         void *priv;
     } direct;
-
-#if ENABLE_BGCACHE
+    
+    uint32_t gb_cart_ram_size;
+    
+    #if ENABLE_BGCACHE
     uint8_t *bgcache;
 
 #if ENABLE_BGCACHE_DEFERRED
@@ -4263,7 +4265,7 @@ __core static unsigned __gb_run_instruction_micro(struct gb_s *gb)
     float cycles = 1;  // use fpu register, save space
     unsigned src;
     u8 srcidx;
-
+    
     switch (opcode >> 6)
     {
     case 0:
@@ -4333,6 +4335,7 @@ __core static unsigned __gb_run_instruction_micro(struct gb_s *gb)
         }
         break;
 
+        // inc/dec 8-bit
         case 4:
         case 5:
         case 12:
@@ -4809,10 +4812,13 @@ __core void __gb_step_cpu(struct gb_s *gb)
 
     static u8 _wram[2][WRAM_SIZE];
     static u8 _vram[2][VRAM_SIZE];
+    static u8 _cart_ram[2][0x20000];
     static struct gb_s _gb[2];
 
     memcpy(_wram[0], gb->wram, WRAM_SIZE);
     memcpy(_vram[0], gb->vram, VRAM_SIZE);
+    if (gb->gb_cart_ram_size > 0)
+        memcpy(_cart_ram[0], gb->gb_cart_ram, gb->gb_cart_ram_size);
     memcpy(&_gb[0], gb, sizeof(_gb));
 
     uint8_t opcode = (gb->gb_halt ? 0 : __gb_fetch8(gb));
@@ -4823,10 +4829,14 @@ __core void __gb_step_cpu(struct gb_s *gb)
     memcpy(_wram[1], gb->wram, WRAM_SIZE);
     memcpy(_vram[1], gb->vram, VRAM_SIZE);
     memcpy(&_gb[1], gb, sizeof(struct gb_s));
+    if (gb->gb_cart_ram_size > 0)
+        memcpy(_cart_ram[1], gb->gb_cart_ram, gb->gb_cart_ram_size);
 
     memcpy(gb->wram, _wram[0], WRAM_SIZE);
     memcpy(gb->vram, _vram[0], VRAM_SIZE);
     memcpy(gb, &_gb[0], sizeof(struct gb_s));
+    if (gb->gb_cart_ram_size > 0)
+        memcpy(gb->gb_cart_ram, _cart_ram[0], gb->gb_cart_ram_size);
 
     uint8_t inst_cycles_m = __gb_run_instruction_micro(gb);
 
@@ -4841,6 +4851,11 @@ __core void __gb_step_cpu(struct gb_s *gb)
     {
         gb->gb_frame = 1;
         playdate->system->error("difference in vram on opcode %x", opcode);
+    }
+    if (memcmp(gb->gb_cart_ram, _cart_ram[1], gb->gb_cart_ram_size))
+    {
+        gb->gb_frame = 1;
+        playdate->system->error("difference in cart ram on opcode %x", opcode);
     }
 
     if (memcmp(&gb->cpu_reg, &_gb[1].cpu_reg, sizeof(struct cpu_registers_s)))
@@ -4877,11 +4892,24 @@ __core void __gb_step_cpu(struct gb_s *gb)
             playdate->system->error("PC, was %x, expected %x", gb->cpu_reg.pc,
                                     _gb[1].cpu_reg.pc);
         }
+        goto printregs;
     }
     else if (memcmp(gb, &_gb[1], sizeof(struct gb_s)))
     {
         gb->gb_frame = 1;
         playdate->system->error("difference in gb struct on opcode %x", opcode);
+        goto printregs;
+    }
+    
+    if (false)
+    {
+    printregs:
+        playdate->system->logToConsole("AF %x -> %x", _gb[0].cpu_reg.af, gb->cpu_reg.af);
+        playdate->system->logToConsole("BC %x -> %x", _gb[0].cpu_reg.bc, gb->cpu_reg.bc);
+        playdate->system->logToConsole("DE %x -> %x", _gb[0].cpu_reg.de, gb->cpu_reg.de);
+        playdate->system->logToConsole("HL %x -> %x", _gb[0].cpu_reg.hl, gb->cpu_reg.hl);
+        playdate->system->logToConsole("SP %x -> %x", _gb[0].cpu_reg.sp, gb->cpu_reg.sp);
+        playdate->system->logToConsole("PC %x -> %x", _gb[0].cpu_reg.pc, gb->cpu_reg.pc);
     }
 
     if (inst_cycles != inst_cycles_m)

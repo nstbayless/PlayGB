@@ -211,6 +211,7 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
                                gb_get_save_size(context->gb));
 
             context->gb->gb_cart_ram = context->cart_ram;
+            context->gb->gb_cart_ram_size = gb_get_save_size(context->gb);
 
             uint8_t actual_cartridge_type = context->gb->gb_rom[0x0147];
             if (actual_cartridge_type == 0x0F || actual_cartridge_type == 0x10)
