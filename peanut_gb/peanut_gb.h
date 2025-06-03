@@ -1561,7 +1561,7 @@ __core_section("draw") static u8 __gb_get_pixel(uint8_t *line, u8 x)
 }
 
 // renders one scanline
-__core_section("draw") void __gb_draw_line(struct gb_s *gb)
+__core_section("draw") void __gb_draw_line(struct gb_s *restrict gb)
 {
 #if ENABLE_BGCACHE_DEFERRED
     if unlikely (gb->dirty_tile_data_master)
@@ -1569,6 +1569,11 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
     if unlikely (gb->dirty_tile_rows)
         __gb_process_deferred_tile_update(gb);
 #endif
+
+    __builtin_prefetch(&gb->gb_reg.LCDC, 0);
+    __builtin_prefetch(&gb->gb_reg.WX, 0);
+    __builtin_prefetch(&gb->gb_reg.BGP, 0);
+    __builtin_prefetch(&gb->display.WY, 0);
 
     uint8_t *pixels = &gb->lcd[gb->gb_reg.LY * LCD_WIDTH_PACKED];
     uint32_t line_priority[((LCD_WIDTH + 31) / 32)];
@@ -1745,7 +1750,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
         const int obscure_x = bg_x % 16;
         hi &= 0xFFFF0000 | (0x0000FFFF << obscure_x);
         hi &= 0x0000FFFF | (0xFFFF0000 << obscure_x);
-        if (obscure_x > 0)
+        if (obscure_x % 16 != 0)
         {
             // obscure background behind window
             ((uint16_t*)line_priority)[wx/16] &= (0xFFFF >> obscure_x);
@@ -1889,6 +1894,8 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
             number_of_sprites = MAX_SPRITES_LINE;
 #endif
 
+        const uint16_t OBP = gb->gb_reg.OBP0 | ((uint16_t) gb->gb_reg.OBP1 << 8);
+
         /* Render each sprite, from low priority to high priority. */
 #if PEANUT_GB_HIGH_LCD_ACCURACY
         /* Render the top ten prioritised sprites on this scanline. */
@@ -1987,8 +1994,10 @@ __core_section("draw") void __gb_draw_line(struct gb_s *gb)
 
                     if (!should_hide_sprite_pixel)
                     {
-                        __gb_draw_pixel(pixels, disp_x,
-                                        gb->display.sp_palette[c + c_add]);
+                        __gb_draw_pixel(
+                            pixels, disp_x,
+                            (OBP >> (c | c_add)) & 3)
+                        ;
                     }
                 }
 
