@@ -6,6 +6,7 @@
  */
 
 #include "minigb_apu.h"
+#include "dtcm.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -687,12 +688,18 @@ void audio_init(uint8_t *_audio_mem)
     }
 }
 
+int audio_enabled;
+
 /**
  * Playdate audio callback function.
  */
 __audio int audio_callback(void *context, int16_t *left, int16_t *right,
                            int len)
 {
+    if (!audio_enabled) return 0;
+    
+    DTCM_VERIFY_DEBUG();
+    
     PGB_GameScene **gameScene_ptr = context;
     PGB_GameScene *gameScene = *gameScene_ptr;
 
@@ -741,6 +748,8 @@ __audio int audio_callback(void *context, int16_t *left, int16_t *right,
         left += chunksize;
         right += chunksize;
     }
+    
+    DTCM_VERIFY_DEBUG();
 
     return 1;
 }

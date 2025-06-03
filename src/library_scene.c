@@ -7,9 +7,11 @@
 
 #include "library_scene.h"
 
+#include "minigb_apu.h"
 #include "app.h"
 #include "game_scene.h"
 #include "preferences.h"
+#include "dtcm.h"
 
 static void PGB_LibraryScene_update(void *object);
 static void PGB_LibraryScene_free(void *object);
@@ -28,6 +30,8 @@ PGB_LibraryScene *PGB_LibraryScene_new(void)
 
     PGB_LibraryScene *libraryScene = pgb_malloc(sizeof(PGB_LibraryScene));
     libraryScene->scene = scene;
+    
+    DTCM_VERIFY_DEBUG();
 
     scene->managedObject = libraryScene;
 
@@ -42,6 +46,8 @@ PGB_LibraryScene *PGB_LibraryScene_new(void)
     libraryScene->listView = PGB_ListView_new();
     libraryScene->tab = PGB_LibrarySceneTabList;
     libraryScene->lastSelectedItem = -1;
+    
+    DTCM_VERIFY_DEBUG();
 
     PGB_LibraryScene_reloadList(libraryScene);
 
@@ -80,11 +86,27 @@ static void PGB_LibraryScene_reloadList(PGB_LibraryScene *libraryScene)
     }
 
     array_clear(libraryScene->games);
-
+    
+    DTCM_VERIFY();
+    #ifdef DTCM_ALLOC
+    // NOTE: listfiles can cause a stack overflow into the dtcm region.
+    // Therefore, we must back up the dtcm area and restore it.
+    void* stored_dtcm = dtcm_store();
+    int prev_audio = audio_enabled;
+    audio_enabled = 0; // to be sure that the audio source doesn't read/write to dtcm during this operation
+    #endif
+    
     playdate->file->listfiles(PGB_gamesPath, PGB_LibraryScene_listFiles,
                               libraryScene, 0);
 
+    #ifdef DTCM_ALLOC
+    dtcm_restore(stored_dtcm);
+    audio_enabled = prev_audio;
+    #endif
+
+    DTCM_VERIFY();
     pgb_sort_games_array(libraryScene->games);
+    DTCM_VERIFY_DEBUG();
 
     PGB_Array *items = libraryScene->listView->items;
 
@@ -113,6 +135,8 @@ static void PGB_LibraryScene_reloadList(PGB_LibraryScene *libraryScene)
     {
         libraryScene->tab = PGB_LibrarySceneTabEmpty;
     }
+    
+    DTCM_VERIFY_DEBUG();
 
     PGB_ListView_reload(libraryScene->listView);
 }
@@ -136,7 +160,10 @@ static void PGB_LibraryScene_update(void *object)
             PGB_Game *game = libraryScene->games->items[selectedItem];
 
             PGB_GameScene *gameScene = PGB_GameScene_new(game->fullpath);
-            PGB_present(gameScene->scene);
+            if (gameScene)
+            {
+                PGB_present(gameScene->scene);
+            }
         }
     }
 

@@ -11,6 +11,7 @@
 #include "game_scene.h"
 #include "library_scene.h"
 #include "preferences.h"
+#include "dtcm.h"
 
 PGB_Application *PGB_App;
 
@@ -59,11 +60,14 @@ __section__(".text.main") void PGB_update(float dt)
     if (PGB_App->scene)
     {
         void *managedObject = PGB_App->scene->managedObject;
+        DTCM_VERIFY_DEBUG();
         PGB_App->scene->update(managedObject);
+        DTCM_VERIFY_DEBUG();
     }
 
     if (PGB_App->pendingScene)
     {
+        DTCM_VERIFY();
         // present pending scene
 
         if (PGB_App->scene)
@@ -78,6 +82,7 @@ __section__(".text.main") void PGB_update(float dt)
         PGB_App->pendingScene = NULL;
 
         PGB_Scene_refreshMenu(PGB_App->scene);
+        DTCM_VERIFY();
     }
 
 #if PGB_DEBUG

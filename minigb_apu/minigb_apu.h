@@ -22,6 +22,9 @@
 
 #define AUDIO_SAMPLES ((unsigned)(AUDIO_SAMPLE_RATE / VERTICAL_SYNC))
 
+// master audio control
+extern int audio_enabled;
+
 /**
  * Read audio register at given address "addr".
  */

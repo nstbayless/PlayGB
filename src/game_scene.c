@@ -111,6 +111,8 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 {
     playdate->system->logToConsole("ROM: %s", rom_filename);
     playdate->system->setCrankSoundsDisabled(true);
+    
+    if (!DTCM_VERIFY_DEBUG()) return NULL;
 
     PGB_Scene *scene = PGB_Scene_new();
 
@@ -175,13 +177,16 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     {
         gb = &gb_fallback;
     }
+    memset(gb, 0, sizeof(struct gb_s));
     itcm_core_init();
+    DTCM_VERIFY_DEBUG();
 
     if (PGB_App->soundSource == NULL)
     {
         PGB_App->soundSource =
             playdate->sound->addSource(audio_callback, &audioGameScene, 1);
     }
+    audio_enabled = 1;
     context->gb = gb;
     context->scene = gameScene;
     context->rom = NULL;
@@ -201,6 +206,7 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
         context->rom = rom;
 
         static uint8_t lcd[LCD_HEIGHT * LCD_WIDTH_PACKED * 2];
+        memset(lcd, 0, sizeof(lcd));
 
         enum gb_init_error_e gb_ret =
             gb_init(context->gb, context->wram, context->vram, lcd, rom,
@@ -472,6 +478,8 @@ static void write_cart_ram_file(const char *save_filename, uint8_t *src,
 
 static void gb_save_to_disk(struct gb_s *gb)
 {
+    DTCM_VERIFY_DEBUG();
+    
     PGB_GameSceneContext *context = gb->direct.priv;
     PGB_GameScene* gameScene = context->scene;
     
@@ -489,6 +497,8 @@ static void gb_save_to_disk(struct gb_s *gb)
     }
     
     context->gb->direct.sram_dirty = false;
+    
+    DTCM_VERIFY_DEBUG();
 }
 
 /**
@@ -771,7 +781,9 @@ static void PGB_GameScene_update(void *object)
         context->gb->direct.sram_updated = 0;
 
 #ifdef DTCM_ALLOC
+        DTCM_VERIFY_DEBUG();
         ITCM_CORE_FN(gb_run_frame)(context->gb);
+        DTCM_VERIFY_DEBUG();
 #else
         // copy gb to stack (DTCM) temporarily
         struct gb_s gb;
@@ -1239,11 +1251,15 @@ static void save_check(struct gb_s *gb)
 
 static void PGB_GameScene_didSelectLibrary(void *userdata)
 {
+    DTCM_VERIFY();
+    
     PGB_GameScene *gameScene = userdata;
 
     gameScene->audioLocked = true;
 
     PGB_goToLibrary();
+    
+    DTCM_VERIFY();
 }
 
 static void PGB_GameScene_didToggleLCD(void *userdata)
@@ -1411,6 +1427,9 @@ static void PGB_GameScene_event(void *object, PDSystemEvent event, uint32_t arg)
 
 static void PGB_GameScene_free(void *object)
 {
+    audio_enabled = 0;
+    
+    DTCM_VERIFY_DEBUG();
     PGB_GameScene *gameScene = object;
     PGB_GameSceneContext *context = gameScene->context;
 
@@ -1443,4 +1462,5 @@ static void PGB_GameScene_free(void *object)
 
     pgb_free(context);
     pgb_free(gameScene);
+    DTCM_VERIFY_DEBUG();
 }

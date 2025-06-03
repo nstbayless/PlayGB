@@ -26,9 +26,8 @@ __section__(".text.main") DllExport
     int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg)
 {
     eventHandler_pdnewlib(pd, event, arg);
-
-    if (!dtcm_verify())
-        return 0;
+    
+    DTCM_VERIFY_DEBUG();
     
     if (event != kEventInit)
     {
@@ -50,6 +49,8 @@ __section__(".text.main") DllExport
     {
         PGB_quit();
     }
+    
+    DTCM_VERIFY_DEBUG();
 
     return 0;
 }
@@ -57,11 +58,22 @@ __section__(".text.main") DllExport
 __section__(".text.main") int update(void *userdata)
 {
     PlaydateAPI *pd = userdata;
+    
+    #if DTCM_DEBUG
+    const char* dtcm_verify_context = "main update";
+    #else
+    const char* dtcm_verify_context = "main update (debug with -DDTCM_DEBUG=1)";
+    #endif
+    
+    if (!dtcm_verify(dtcm_verify_context))
+        return 0;
 
     float dt = pd->system->getElapsedTime();
     pd->system->resetElapsedTime();
 
     PGB_update(dt);
+    
+    DTCM_VERIFY_DEBUG();
 
     return 1;
 }
