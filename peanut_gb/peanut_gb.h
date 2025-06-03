@@ -388,6 +388,9 @@ struct gb_s
      * \param val           arbitrary value related to error
      */
     void (*gb_error)(struct gb_s *, const enum gb_error_e, const uint16_t val);
+    
+    // Notify front-end to save cartridge SRAM to disk
+    void (*gb_save_to_disk)(struct gb_s *);
 
     /* Transmit one byte and return the received byte. */
     void (*gb_serial_tx)(struct gb_s *, const uint8_t tx);
@@ -416,7 +419,8 @@ struct gb_s
      * Memory Bank Controller (MBC) type. */
     uint8_t mbc;
     /* Whether the MBC has internal RAM. */
-    uint8_t cart_ram;
+    uint8_t cart_ram : 1;
+    uint8_t cart_battery : 1;
     /* Number of ROM banks in cartridge. */
     uint16_t num_rom_banks_mask;
     /* Number of RAM banks in cartridge. */
@@ -507,6 +511,8 @@ struct gb_s
          */
         uint8_t frame_skip : 1;
         uint8_t sound : 1;
+        uint8_t sram_updated : 1;
+        uint8_t sram_dirty : 1;
 
         union
         {
@@ -523,6 +529,11 @@ struct gb_s
             } joypad_bits;
             uint8_t joypad;
         };
+        
+        #define PGB_MIN_FRAMES_SAVE 90
+        #define PGB_MAX_FRAMES_SAVE (60 * 100)
+        uint32_t frames_since_last_save;
+        uint32_t frames_since_sram_update;
 
         /* Implementation defined data. Set to NULL if not required. */
         void *priv;
@@ -1052,6 +1063,7 @@ __shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
     case 0xB:
         if (gb->cart_ram && gb->enable_cart_ram)
         {
+            const u8 prev = gb->gb_cart_ram[addr - CART_RAM_ADDR];
             if (gb->mbc == 3 && gb->cart_ram_bank >= 0x08)
                 gb->cart_rtc[gb->cart_ram_bank - 0x08] = val;
             else if (gb->cart_mode_select &&
@@ -1059,9 +1071,13 @@ __shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
             {
                 gb->gb_cart_ram[addr - CART_RAM_ADDR +
                                 (gb->cart_ram_bank * CRAM_BANK_SIZE)] = val;
+                gb->direct.sram_updated |= prev != val;
             }
             else if (gb->num_ram_banks)
+            {
+                gb->direct.sram_updated |= prev != val;
                 gb->gb_cart_ram[addr - CART_RAM_ADDR] = val;
+            }
         }
 
         return;
@@ -5094,6 +5110,9 @@ done_instr:
 
 __core void gb_run_frame(struct gb_s *gb)
 {
+    bool sram_updated_prev = gb->direct.sram_updated;
+    gb->direct.sram_updated = 0;
+    
     gb->gb_frame = 0;
 
     /*
@@ -5109,6 +5128,35 @@ __core void gb_run_frame(struct gb_s *gb)
     while (!gb->gb_frame)
     {
         __gb_step_cpu(gb);
+    }
+    
+    // save SRAM under some conditions
+    // TODO: also save if menu opens, playdate goes to sleep, app closes, or powers down
+    gb->direct.sram_dirty |= gb->direct.sram_updated;
+    ++gb->direct.frames_since_last_save;
+    if (gb->cart_battery && gb->direct.sram_dirty && gb->gb_save_to_disk)
+    {
+        if (gb->direct.frames_since_last_save >= PGB_MAX_FRAMES_SAVE)
+        {
+            playdate->system->logToConsole("Saving (periodic)");
+            gb->gb_save_to_disk(gb);
+            gb->direct.frames_since_last_save = 0;
+            gb->direct.frames_since_sram_update = 0;
+        }
+        else if (!gb->direct.sram_updated)
+        {
+            if (gb->direct.frames_since_sram_update >= PGB_MIN_FRAMES_SAVE)
+            {
+                playdate->system->logToConsole("Saving (gap since last ram edit)");
+                gb->gb_save_to_disk(gb);
+                gb->direct.frames_since_last_save = 0;
+            }
+            gb->direct.frames_since_sram_update = 0;
+        }
+    }
+    else
+    {
+        gb->direct.frames_since_sram_update++;
     }
 }
 
@@ -5250,6 +5298,14 @@ enum gb_init_error_e gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram,
         0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0,
         1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0
     };
+    const uint8_t cart_battery[] =
+    {
+        0, 0, 0, 1, 0, 0, 1, 0,
+        0, 1, 0, 0, 0, 1, 0, 1,
+        1, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 1, 0, 0, 1, 0,
+        0, 0, 1,
+    };
     const uint16_t num_rom_banks_mask[] =
     {
         2, 4, 8, 16, 32, 64, 128, 256, 512
@@ -5299,6 +5355,7 @@ enum gb_init_error_e gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram,
     }
 
     gb->cart_ram = cart_ram[gb->gb_rom[mbc_location]];
+    gb->cart_battery = cart_battery[gb->gb_rom[mbc_location]];
     gb->num_rom_banks_mask =
         num_rom_banks_mask[gb->gb_rom[bank_count_location]] - 1;
     gb->num_ram_banks = num_ram_banks[gb->gb_rom[ram_size_location]];

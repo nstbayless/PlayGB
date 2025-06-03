@@ -10,6 +10,7 @@
 #include "app.h"
 
 static void PGB_Scene_menu_callback(void *object);
+static void PGB_Scene_event(void *object, PDSystemEvent event, uint32_t arg);
 
 PGB_Scene *PGB_Scene_new(void)
 {
@@ -18,6 +19,7 @@ PGB_Scene *PGB_Scene_new(void)
     scene->update = PGB_Scene_update;
     scene->menu = PGB_Scene_menu_callback;
     scene->free = PGB_Scene_free;
+    scene->event = NULL;
 
     scene->preferredRefreshRate = 30;
     scene->refreshRateCompensation = 0;
@@ -30,6 +32,10 @@ void PGB_Scene_update(void *object)
 }
 
 static void PGB_Scene_menu_callback(void *object)
+{
+}
+
+static void PGB_Scene_event(void *object, PDSystemEvent event, uint32_t arg)
 {
 }
 

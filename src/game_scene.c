@@ -44,20 +44,21 @@ typedef struct PGB_GameSceneContext
 static void PGB_GameScene_selector_init(PGB_GameScene *gameScene);
 static void PGB_GameScene_update(void *object);
 static void PGB_GameScene_menu(void *object);
-static void PGB_GameScene_saveGame(PGB_GameScene *gameScene);
 static void PGB_GameScene_generateBitmask(void);
 static void PGB_GameScene_free(void *object);
+static void PGB_GameScene_event(void *object, PDSystemEvent event, uint32_t arg);
 
 static uint8_t *read_rom_to_ram(const char *filename,
                                 PGB_GameSceneError *sceneError);
 
 static void read_cart_ram_file(const char *save_filename, uint8_t **dest,
                                const size_t len);
-static void write_cart_ram_file(const char *save_filename, uint8_t **dest,
+static void write_cart_ram_file(const char *save_filename, uint8_t *src,
                                 const size_t len);
 
 static void gb_error(struct gb_s *gb, const enum gb_error_e gb_err,
                      const uint16_t val);
+static void gb_save_to_disk(struct gb_s *gb);
 
 static const char *startButtonText = "start";
 static const char *selectButtonText = "select";
@@ -119,6 +120,7 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     scene->update = PGB_GameScene_update;
     scene->menu = PGB_GameScene_menu;
     scene->free = PGB_GameScene_free;
+    scene->event = PGB_GameScene_event;
 
     scene->preferredRefreshRate = 30;
 
@@ -210,6 +212,8 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 
             read_cart_ram_file(save_filename, &context->cart_ram,
                                gb_get_save_size(context->gb));
+            
+            gb->gb_save_to_disk = gb_save_to_disk;
 
             context->gb->gb_cart_ram = context->cart_ram;
             context->gb->gb_cart_ram_size = gb_get_save_size(context->gb);
@@ -443,13 +447,15 @@ static void read_cart_ram_file(const char *save_filename, uint8_t **dest,
     playdate->file->close(f);
 }
 
-static void write_cart_ram_file(const char *save_filename, uint8_t **dest,
+static void write_cart_ram_file(const char *save_filename, uint8_t *src,
                                 const size_t len)
 {
-    if (len == 0 || *dest == NULL)
+    if (len == 0 || src == NULL)
     {
         return;
     }
+    
+    playdate->system->logToConsole("Saving SRAM to file %s", save_filename);
 
     SDFile *f = playdate->file->open(save_filename, kFileWrite);
 
@@ -461,8 +467,29 @@ static void write_cart_ram_file(const char *save_filename, uint8_t **dest,
     }
 
     /* Record save file. */
-    playdate->file->write(f, *dest, (unsigned int)(len * sizeof(uint8_t)));
+    playdate->file->write(f, src, (unsigned int)(len * sizeof(uint8_t)));
     playdate->file->close(f);
+}
+
+static void gb_save_to_disk(struct gb_s *gb)
+{
+    PGB_GameSceneContext *context = gb->direct.priv;
+    PGB_GameScene* gameScene = context->scene;
+    
+    if (!context->gb->direct.sram_dirty) return;
+    
+    if (gameScene->save_filename)
+    {
+        write_cart_ram_file(
+            gameScene->save_filename,
+            context->gb->gb_cart_ram,
+            gb_get_save_size(context->gb)
+        );
+    } else {
+        playdate->system->logToConsole("No save file name specified; can't save.");
+    }
+    
+    context->gb->direct.sram_dirty = false;
 }
 
 /**
@@ -484,10 +511,13 @@ static void gb_error(struct gb_s *gb, const enum gb_error_e gb_err,
             "%s:%i: Invalid opcode %#04x at PC: %#06x, SP: %#06x", __FILE__,
             __LINE__, val, gb->cpu_reg.pc - 1, gb->cpu_reg.sp);
     }
-    else if (gb_err == GB_INVALID_READ || gb_err == GB_INVALID_WRITE)
+    else if (gb_err == GB_INVALID_READ)
     {
-        playdate->system->logToConsole("%s:%i: Invalid read / write", __FILE__,
-                                       __LINE__);
+        playdate->system->logToConsole("Invalid read: addr %04x", val);
+    }
+    else if (gb_err == GB_INVALID_WRITE)
+    {
+        playdate->system->logToConsole("Invalid write: addr %04x", val);
     }
     else
     {
@@ -498,14 +528,15 @@ static void gb_error(struct gb_s *gb, const enum gb_error_e gb_err,
 
     if (is_fatal)
     {
-        // write recovery .sav
-        char *recovery_filename =
-            pgb_save_filename(context->scene->rom_filename, true);
-        write_cart_ram_file(recovery_filename, &context->gb->gb_cart_ram,
-                            gb_get_save_size(gb));
-
+        // save a recovery file
+        char* recovery_filename = pgb_save_filename(context->scene->rom_filename, true);
+        write_cart_ram_file(recovery_filename,
+                                context->gb->gb_cart_ram,
+                                gb_get_save_size(context->gb));
         pgb_free(recovery_filename);
-
+        
+        // TODO: write recovery savestate
+        
         context->scene->state = PGB_GameSceneStateError;
         context->scene->error = PGB_GameSceneErrorFatal;
 
@@ -1160,17 +1191,6 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
     }
 }
 
-static void PGB_GameScene_didSelectSave(void *userdata)
-{
-    PGB_GameScene *gameScene = userdata;
-
-    gameScene->audioLocked = true;
-
-    PGB_GameScene_saveGame(gameScene);
-
-    gameScene->audioLocked = false;
-}
-
 static void PGB_GameScene_didSelectLibrary(void *userdata)
 {
     PGB_GameScene *gameScene = userdata;
@@ -1269,26 +1289,8 @@ static void PGB_GameScene_menu(void *object)
 
     if (gameScene->state == PGB_GameSceneStateLoaded)
     {
-        playdate->system->addMenuItem("Save", PGB_GameScene_didSelectSave,
-                                      gameScene);
-
         playdate->system->addCheckmarkMenuItem(
             "LCD", 1, PGB_GameScene_didToggleLCD, gameScene);
-    }
-}
-
-static void PGB_GameScene_saveGame(PGB_GameScene *gameScene)
-{
-    if (gameScene->state == PGB_GameSceneStateLoaded)
-    {
-        PGB_GameSceneContext *context = gameScene->context;
-
-        if (gameScene->save_filename)
-        {
-            write_cart_ram_file(gameScene->save_filename,
-                                &context->gb->gb_cart_ram,
-                                gb_get_save_size(context->gb));
-        }
     }
 }
 
@@ -1328,6 +1330,38 @@ static void PGB_GameScene_generateBitmask(void)
     }
 }
 
+static void PGB_GameScene_event(void *object, PDSystemEvent event, uint32_t arg)
+{
+    PGB_GameScene *gameScene = object;
+    PGB_GameSceneContext *context = gameScene->context;
+    
+    switch (event)
+    {
+    case kEventLock:
+    case kEventPause:
+    case kEventTerminate:
+        if (context->gb->direct.sram_dirty)
+        {
+            playdate->system->logToConsole("saving (system event)");
+            gb_save_to_disk(context->gb);
+        }
+        break;
+    case kEventLowPower:
+        if (context->gb->direct.sram_dirty)
+        {
+            // save a recovery file
+            char* recovery_filename = pgb_save_filename(context->scene->rom_filename, true);
+            write_cart_ram_file(recovery_filename,
+                                    context->gb->gb_cart_ram,
+                                    gb_get_save_size(context->gb));
+            pgb_free(recovery_filename);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 static void PGB_GameScene_free(void *object)
 {
     PGB_GameScene *gameScene = object;
@@ -1339,7 +1373,7 @@ static void PGB_GameScene_free(void *object)
 
     PGB_Scene_free(gameScene->scene);
 
-    PGB_GameScene_saveGame(gameScene);
+    gb_save_to_disk(context->gb);
 
     gb_reset(context->gb);
 

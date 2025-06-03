@@ -29,6 +29,11 @@ __section__(".text.main") DllExport
 
     if (!dtcm_verify())
         return 0;
+    
+    if (event != kEventInit)
+    {
+        PGB_event(event, arg);
+    }
 
     if (event == kEventInit)
     {

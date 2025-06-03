@@ -114,6 +114,14 @@ void PGB_goToLibrary(void)
     PGB_present(libraryScene->scene);
 }
 
+void PGB_event(PDSystemEvent event, uint32_t arg)
+{
+    if (PGB_App->scene)
+    {
+        PGB_App->scene->event(PGB_App->scene->managedObject, event, arg);
+    }
+}
+
 void PGB_quit(void)
 {
     preferences_save_to_disk();

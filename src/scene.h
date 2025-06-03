@@ -11,6 +11,7 @@
 #include <stdio.h>
 
 #include "utility.h"
+#include "pd_api.h"
 
 typedef struct PGB_Scene
 {
@@ -22,6 +23,7 @@ typedef struct PGB_Scene
     void (*update)(void *object);
     void (*menu)(void *object);
     void (*free)(void *object);
+    void (*event)(void *object, PDSystemEvent event, uint32_t arg);
 } PGB_Scene;
 
 PGB_Scene *PGB_Scene_new(void);
