@@ -19,7 +19,7 @@ PGB_Scene *PGB_Scene_new(void)
     scene->update = PGB_Scene_update;
     scene->menu = PGB_Scene_menu_callback;
     scene->free = PGB_Scene_free;
-    scene->event = NULL;
+    scene->event = PGB_Scene_event;
 
     scene->preferredRefreshRate = 30;
     scene->refreshRateCompensation = 0;
