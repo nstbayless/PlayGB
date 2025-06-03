@@ -32,15 +32,6 @@
 #ifndef PEANUT_GB_H
 #define PEANUT_GB_H
 
-#ifdef TARGET_SIMULATOR
-#define CPU_VALIDATE 1
-#define PGB_ASSERT(x) \
-    if (!(x))         \
-        playdate->system->error("ASSERTION FAILED: %s", #x);
-#else
-#define PGB_ASSERT(x)
-#endif
-
 #include <stdint.h> /* Required for int types */
 #include <stdlib.h> /* Required for qsort */
 #include <string.h> /* Required for memset */
@@ -859,7 +850,10 @@ __core_section("bgcache") void __gb_update_bgcache_tile(
 
         // bgcache format: each 32 bits is a pair of 16 bit low color, 16 bit hi
         // color
-        uint8_t *t = &bgcache[(tx / 2) * 4 + y * BGCACHE_STRIDE + (tx % 2)];
+        size_t index = (tx / 2) * 4 + y * BGCACHE_STRIDE + (tx % 2);
+        PGB_ASSERT(index + 2 < BGCACHE_SIZE);
+        uint8_t *t = &bgcache[index];
+        
         t[0] = reverse_bits_u8(t1);
         t[2] = reverse_bits_u8(t2);
     }
@@ -1060,17 +1054,23 @@ __shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
         {
             const u8 prev = gb->gb_cart_ram[addr - CART_RAM_ADDR];
             if (gb->mbc == 3 && gb->cart_ram_bank >= 0x08)
-                gb->cart_rtc[gb->cart_ram_bank - 0x08] = val;
+            {
+                size_t idx = gb->cart_ram_bank - 0x08;
+                PGB_ASSERT(idx < PEANUT_GB_ARRAYSIZE(gb->cart_rtc));
+                gb->cart_rtc[idx] = val;
+            }
             else if (gb->cart_mode_select &&
                      gb->cart_ram_bank < gb->num_ram_banks)
             {
-                gb->gb_cart_ram[addr - CART_RAM_ADDR +
-                                (gb->cart_ram_bank * CRAM_BANK_SIZE)] = val;
+                size_t idx = addr - CART_RAM_ADDR + (gb->cart_ram_bank * CRAM_BANK_SIZE);
+                PGB_ASSERT(idx < gb->gb_cart_ram_size);
+                gb->gb_cart_ram[idx] = val;
                 gb->direct.sram_updated |= prev != val;
             }
             else if (gb->num_ram_banks)
             {
                 gb->direct.sram_updated |= prev != val;
+                PGB_ASSERT(addr - CART_RAM_ADDR < gb->gb_cart_ram_size);
                 gb->gb_cart_ram[addr - CART_RAM_ADDR] = val;
             }
         }

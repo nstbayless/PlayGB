@@ -114,10 +114,13 @@ void PGB_goToLibrary(void)
     PGB_present(libraryScene->scene);
 }
 
+__section__(".text.main")
 void PGB_event(PDSystemEvent event, uint32_t arg)
 {
+    PGB_ASSERT(PGB_App);
     if (PGB_App->scene)
     {
+        PGB_ASSERT(PGB_App->scene->event != NULL);
         PGB_App->scene->event(PGB_App->scene->managedObject, event, arg);
     }
 }

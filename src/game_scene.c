@@ -109,6 +109,7 @@ void itcm_core_init(void)
 
 PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 {
+    playdate->system->logToConsole("ROM: %s", rom_filename);
     playdate->system->setCrankSoundsDisabled(true);
 
     PGB_Scene *scene = PGB_Scene_new();

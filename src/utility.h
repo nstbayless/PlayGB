@@ -99,4 +99,13 @@ void pgb_free_loaded_cover_art_bitmap(PGB_LoadedCoverArt *art_result);
 #define clalign __attribute__((aligned(32)))
 #endif
 
+#ifdef TARGET_SIMULATOR
+#define CPU_VALIDATE 1
+#define PGB_ASSERT(x) \
+    if (!(x))         \
+        playdate->system->error("ASSERTION FAILED: %s", #x);
+#else
+#define PGB_ASSERT(x)
+#endif
+
 #endif /* utility_h */
