@@ -7,3 +7,6 @@
 /Source/pdex.so
 .vscode
 *.zip
+
+# symbol file, for manually checking alignment
+syms*.txt

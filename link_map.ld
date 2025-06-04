@@ -27,16 +27,16 @@ SECTIONS
 		build/lua-5.4.7/*(.text.*)
 		
 		. = ALIGN(32);
+		build/src/script.o(.text)
+		build/src/script.o(.text.*)
+		
+		. = ALIGN(0x1000); . += 0x5A0;
 		*(.text.main)
 		
 		. = ALIGN(32);
 		*(.text.tick)
 		
-		. = ALIGN(32);
-		build/src/script.o(.text)
-		build/src/script.o(.text.*)
-		
-		. = ALIGN(32);
+		. = ALIGN(0x1000); . += 0x720;
 		*(.text.pgb)
 
 		. = ALIGN(32);
@@ -49,7 +49,7 @@ SECTIONS
 		*(.text.*)
 		
 		/* code to copy to TCM, seemingly runs faster */
-		. = ALIGN(32);
+		. = ALIGN(0x1000);
 		. += 0x6;
         __itcm_start = .;
 		*(.itcm.short)
