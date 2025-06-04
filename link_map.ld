@@ -20,6 +20,10 @@ SECTIONS
 	.text :
 	{        	
 		__text_start__ = .;
+		build/pdnewlib.o(.text)
+		build/lua-5.4.7/*(.text)
+		build/lua-5.4.7/*(.text.*)
+		
 		. = ALIGN(32);
 		*(.text.main)
 		

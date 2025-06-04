@@ -1266,6 +1266,7 @@ static void save_check(struct gb_s *gb)
     }
 }
 
+__section__(".rare")
 void PGB_GameScene_didSelectLibrary(void *userdata)
 {
     DTCM_VERIFY();

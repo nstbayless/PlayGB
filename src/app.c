@@ -53,6 +53,7 @@ void PGB_init(void)
     PGB_present(libraryScene->scene);
 }
 
+__section__(".rare")
 static void switchToPendingScene()
 {
     // present pending scene
@@ -134,7 +135,7 @@ void PGB_goToLibrary(void)
     PGB_present(libraryScene->scene);
 }
 
-__section__(".text.main")
+__section__(".rare")
 void PGB_event(PDSystemEvent event, uint32_t arg)
 {
     PGB_ASSERT(PGB_App);

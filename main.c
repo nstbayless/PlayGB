@@ -23,6 +23,7 @@
 static int update(void *userdata);
 int eventHandler_pdnewlib(PlaydateAPI *, PDSystemEvent event, uint32_t arg);
 
+__section__(".rare")
 static void* user_stack_test(void* p)
 {
     if (p == (void*)(uintptr_t)0x103)
