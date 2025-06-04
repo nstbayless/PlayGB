@@ -38,9 +38,16 @@ void PGB_init(void)
     PGB_App->labelFont =
         playdate->graphics->loadFont("fonts/Nontendo-Bold", NULL);
 
-    PGB_App->selectorBitmapTable =
-        playdate->graphics->loadBitmapTable("images/selector/selector", NULL);
-    PGB_App->startSelectBitmap =
+    PGB_App->selectorNeutralBitmap =
+        playdate->graphics->loadBitmap("images/selector-neutral", NULL);
+
+    PGB_App->selectorStartBitmap =
+        playdate->graphics->loadBitmap("images/selector-start", NULL);
+
+    PGB_App->selectorSelectBitmap =
+        playdate->graphics->loadBitmap("images/selector-select", NULL);
+
+    PGB_App->selectorStartSelectBitmap =
         playdate->graphics->loadBitmap("images/selector-start-select", NULL);
 
     // add audio callback later

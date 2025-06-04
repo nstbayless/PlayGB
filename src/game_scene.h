@@ -36,8 +36,9 @@ typedef struct
 {
     PGB_GameSceneState state;
     PGB_GameSceneError error;
-    int selectorIndex;
     bool empty;
+    bool startPressed_for_visuals;
+    bool selectPressed_for_visuals;
 } PGB_GameSceneModel;
 
 typedef struct
@@ -54,12 +55,15 @@ typedef struct
     int startButtonY;
     int selectButtonX;
     int selectButtonY;
-    int numberOfFrames;
     float triggerAngle;
     float deadAngle;
-    float index;
     bool startPressed;
     bool selectPressed;
+    bool is_in_start_zone_latch;
+    bool is_in_select_zone_latch;
+    bool is_in_both_zone_latch;
+    int start_pulse_countdown;
+    int select_pulse_countdown;
 } PGB_CrankSelector;
 
 typedef struct PGB_GameScene
