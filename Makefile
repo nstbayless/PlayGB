@@ -47,10 +47,11 @@ UINCDIR += lua-5.4.7
 
 
 # Note: if there are unexplained crashes, try disabling these.
+# LUA: enable lua scripting (uses embedded lua engine)
 # DTCM_ALLOC: allow allocating variables in DTCM at the low-address end of the region reserved for the stack.
 # ITCM_CORE (requires DTCM_ALLOC, and special link_map.ld): run core interpreter from ITCM.
 # Note: DTCM only active on Rev A regardless.
-UDEFS = -DDTCM_ALLOC -DITCM_CORE -DDTCM_DEBUG=0 -falign-loops=32 -fprefetch-loop-arrays
+UDEFS = -DLUA -DDTCM_ALLOC -DITCM_CORE -DDTCM_DEBUG=0 -falign-loops=32 -fprefetch-loop-arrays
 
 # Define ASM defines here
 UADEFS =

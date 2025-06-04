@@ -21,6 +21,8 @@ SECTIONS
 	{        	
 		__text_start__ = .;
 		build/pdnewlib.o(.text)
+		
+		. = ALIGN(32);
 		build/lua-5.4.7/*(.text)
 		build/lua-5.4.7/*(.text.*)
 		
@@ -29,6 +31,10 @@ SECTIONS
 		
 		. = ALIGN(32);
 		*(.text.tick)
+		
+		. = ALIGN(32);
+		build/src/script.o(.text)
+		build/src/script.o(.text.*)
 		
 		. = ALIGN(32);
 		*(.text.pgb)

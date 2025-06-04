@@ -1,5 +1,14 @@
 #include "pd_api.h"
 
+static const int PD_SEEK_SET = SEEK_SET;
+static const int PD_SEEK_CUR = SEEK_CUR;
+static const int PD_SEEK_END = SEEK_END;
+
+// clash -- unistd.h defines these, could be different
+#undef SEEK_SET
+#undef SEEK_CUR
+#undef SEEK_END
+
 #ifdef TARGET_PLAYDATE
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +16,8 @@
 #include <sys/time.h>
 #include <sys/times.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef errno
 	#undef errno
 #endif
@@ -31,7 +42,7 @@ int eventHandler_pdnewlib(PlaydateAPI* _pd, PDSystemEvent event, uint32_t arg)
 		pd = _pd;
 		if (!_is_init)
 		{
-			printf("Warning: __attribute__((constructor)) not supported");
+			printf("Warning: __attribute__((constructor)) not supported\n");
 		}
 	}
 	return 0;
@@ -144,43 +155,155 @@ int _write(int handle, char* data, int size)
 			int s = pd->file->write(file, data, size);
 			if (s < 0)
 			{
-				// TODO: errno
+				errno = EINVAL; // FIXME: is this right?
 				return -1;
 			}
 			return s;
 		}
 	}
 	
-	// TODO: errno (no such open file)
+	errno = EBADF;
 	return -1;	
 }
 
-int _read(int file, char* ptr, int len)
+int _read(int handle, char* data, int size)
 {
-	pd->system->logToConsole("_read");
-	return 0;
+	//pd->system->logToConsole("_read %d: %x bytes -> %p", handle, size, data);
+	
+	if (size == 0 || data == NULL) return 0;
+	
+	if (handle >= FILEHANDLEOFF && handle < FILEHANDLEOFF + MAXFILES)
+	{
+		SDFile* file = openfiles[handle - FILEHANDLEOFF];
+		
+		if (file)
+		{
+			int s = pd->file->read(file, data, size);
+			if (s < 0)
+			{
+				errno = EINVAL; // FIXME: is this right?
+				return -1;
+			}
+			return s;
+		}
+	}
+	
+	errno = EBADF;
+	return -1;
 }
 
 int _open(const char *name, int flags, int mode)
 {
-	pd->system->logToConsole("_open %s", name);
+	//pd->system->logToConsole("_open \"%s\", %x, %x", name, flags, mode);
+	
+	int force_data = 0;
+	if (strncmp(name, "data:/", 5) == 0)
+	{
+		force_data = 1;
+		name += 5;
+	}
+	
+	if (flags & ~(O_RDONLY | O_RDWR | O_WRONLY | O_APPEND | O_CREAT | O_EXCL))
+	{
+		pd->system->logToConsole("ERROR _open: flag not supported\n");
+		errno = ENOTSUP;
+		return -1;
+	}
+	
+	// pass 0: determine whether to check if file exists
+	// pass 1: check if file exists
+	SDFile* f = NULL; 
+	for (int pass = 0; pass <= 1; ++pass)
+	{
+		if (pass == 1)
+		{
+			f = pd->file->open(name, force_data ? kFileReadData : kFileRead);
+		}
+		
+		if (!(flags & O_CREAT))
+		{
+			// fail if file does not exist
+			if (pass == 0) continue;
+			
+			if (!f)
+			{
+				// FIXME: is EACCES the right code?
+				//pd->system->logToConsole(" -> EACCES\n");
+				errno = EACCES;
+				return -1;
+			}
+		}
+		else if (flags & O_EXCL)
+		{
+			if (pass == 0) continue;
+			// fail if file already exists
+			
+			if (f)
+			{
+				if (pd->file->close(f))
+				{
+					pd->system->logToConsole("ERROR _open: error closing after checking if file exists\n");
+				}
+				//pd->system->logToConsole(" -> EEXIST\n");
+				errno = EEXIST;
+				return -1;
+			}
+		}
+		break;
+	}
+	if (f)
+	{
+		if (pd->file->close(f))
+		{
+			pd->system->logToConsole("ERROR _open: error closing after checking if file exists\n");
+			errno = EIO;
+			return -1;
+		}
+	}
 	
   	for (size_t i = 0; i < MAXFILES; ++i)
 	{
 		if (!openfiles[i])
 		{
-			// TODO: convert mode
-			openfiles[i] = pd->file->open(name, mode);
+			FileOptions fo;
+			
+			switch(flags & (O_RDONLY | O_WRONLY | O_RDWR))
+			{
+			case O_RDONLY:
+				fo = kFileRead;
+				if (force_data)
+				{
+					fo = kFileReadData;
+				}
+				break;
+			case O_WRONLY:
+			case O_RDWR:
+				fo = kFileWrite;
+				if (flags & O_APPEND)
+				{
+					fo = kFileAppend;
+				}
+				break;
+			default:
+				pd->system->logToConsole("ERROR _open: invalid flag\n");		
+				errno = EINVAL;
+				return -1;
+			}
+			
+			openfiles[i] = pd->file->open(name, fo);
 			if (openfiles[i] == NULL)
 			{
+				//pd->system->logToConsole(" -> ENOENT\n");
 				errno = ENOENT;
 				return -1;
 			}
 			
+			//pd->system->logToConsole(" -> %d", (int)(FILEHANDLEOFF + i));
 			return FILEHANDLEOFF + i;
 		}
 	}
 	
+	//pd->system->logToConsole(" -> ENFILE");
 	errno = ENFILE;
 	return -1;
 }
@@ -249,26 +372,45 @@ int _isatty(int file)
 }
 
 int _lseek(int file, int pos, int whence) {
-	if (file < FILEHANDLEOFF || file >= MAXFILES + FILEHANDLEOFF)
+	
+	// translate whence
+	int pdwhence;
+	switch (whence)
+	{
+	case SEEK_SET:
+		pdwhence = PD_SEEK_SET;
+		break;
+	case SEEK_CUR:
+		pdwhence = PD_SEEK_CUR;
+		break;
+	case SEEK_END:
+		pdwhence = PD_SEEK_END;
+		break;
+	default:
+		errno = EINVAL;
+		return -1;
+	}
+	
+	if (file >= FILEHANDLEOFF && file < MAXFILES + FILEHANDLEOFF)
 	{
 		SDFile* f = openfiles[file - FILEHANDLEOFF];
 		if (f)
 		{
 			if (pd->file->seek(f, pos, whence))
 			{
-				// TODO: errno
+				errno = EINVAL; // FIXME: is this right?
 				return -1;
 			}
 			return 0;
 		}
 	}
 	
-	// TODO: errno (no such file)
+	errno = EBADF;
 	return -1;
 }
 
 int _fstat(int file, struct stat *st) {
-	pd->system->logToConsole("_fstat");
+	//pd->system->logToConsole("_fstat");
 	memset(stat, 0, sizeof(stat));
 	if (_isatty(file))
 	{
@@ -284,7 +426,7 @@ int _fstat(int file, struct stat *st) {
 }
 
 int _stat(char *file, struct stat *st) {
-	pd->system->logToConsole("_stat \"%s\"", file);
+	//pd->system->logToConsole("_stat \"%s\"", file);
 	memset(stat, 0, sizeof(stat));
 	FileStat pdstat;
 	

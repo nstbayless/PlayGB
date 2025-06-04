@@ -34,6 +34,8 @@ __section__(".rare") static void *user_stack_test(void *p)
     return (void *)0x784;
 }
 
+int eventHandlerShim(PlaydateAPI* playdate, PDSystemEvent event, uint32_t arg);
+
 __section__(".text.main") DllExport
     int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg)
 {

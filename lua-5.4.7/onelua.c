@@ -11,6 +11,12 @@
 **
 */
 
+#ifdef LUA
+
+#pragma GCC optimize ("Os")
+
+#pragma GCC 
+
 /* default is to build the full interpreter */
 #ifndef MAKE_LIB
 #ifndef MAKE_LUAC
@@ -118,4 +124,6 @@
 /* luac */
 #ifdef MAKE_LUAC
 #include "luac.c"
+#endif
+
 #endif

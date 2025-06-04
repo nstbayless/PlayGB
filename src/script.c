@@ -17,6 +17,8 @@
 #include "dtcm.h"
 #include "script.h"
 
+#ifdef LUA
+
 #define REGISTRY_GAME_SCENE_KEY "PGB_GameScene"
 
 void PGB_GameScene_didSelectLibrary(struct PGB_GameScene *scene);
@@ -288,3 +290,5 @@ void script_tick(lua_State *L)
         lua_pop(L, 1);
     }
 }
+
+#endif
