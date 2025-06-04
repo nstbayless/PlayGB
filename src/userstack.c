@@ -1,6 +1,7 @@
 #ifdef TARGET_PLAYDATE
 
 #include "userstack.h"
+
 #include "pd_api.h"
 #include "utility.h"
 
@@ -9,19 +10,21 @@
 
 static char user_stack[USER_STACK_SIZE] __attribute__((aligned(8)));
 
-__section__(".rare")
-static uint32_t *get_stack_start_canary(void) {
+__section__(".rare") static uint32_t *get_stack_start_canary(void)
+{
     return (uint32_t *)(user_stack);
 }
 
-__section__(".rare")
-static uint32_t *get_stack_end_canary(void) {
+__section__(".rare") static uint32_t *get_stack_end_canary(void)
+{
     return (uint32_t *)(user_stack + USER_STACK_SIZE - sizeof(uint32_t));
 }
 
-__section__(".rare")
-void validate_user_stack(void) {
-    if (*get_stack_start_canary() != CANARY_VALUE || *get_stack_end_canary() != CANARY_VALUE) {
+__section__(".rare") void validate_user_stack(void)
+{
+    if (*get_stack_start_canary() != CANARY_VALUE ||
+        *get_stack_end_canary() != CANARY_VALUE)
+    {
         playdate->system->error("User stack canary corrupted");
     }
 }
@@ -29,9 +32,9 @@ void validate_user_stack(void) {
 #define STRINGIFY_(x) #x
 #define STRINGIFY(x) STRINGIFY_(x)
 
-__attribute__((naked))
-__section__(".rare")
-void* call_with_user_stack_impl(user_stack_fn fn, void *arg, void* arg2) {
+__attribute__((naked)) __section__(".rare") void *call_with_user_stack_impl(
+    user_stack_fn fn, void *arg, void *arg2)
+{
     __asm__ volatile (
         
         "push {lr}\n"
@@ -70,8 +73,7 @@ void* call_with_user_stack_impl(user_stack_fn fn, void *arg, void* arg2) {
     );
 }
 
-__section__(".rare")
-void init_user_stack(void)
+__section__(".rare") void init_user_stack(void)
 {
     *get_stack_start_canary() = CANARY_VALUE;
     *get_stack_end_canary() = CANARY_VALUE;
@@ -80,6 +82,7 @@ void init_user_stack(void)
 #else
 
 void init_user_stack(void)
-{ }
+{
+}
 
 #endif

@@ -517,30 +517,30 @@ struct gb_s
             } joypad_bits;
             uint8_t joypad;
         };
-        
-        #define PGB_MIN_FRAMES_SAVE 90
-        #define PGB_MAX_FRAMES_SAVE (60 * 100)
+
+#define PGB_MIN_FRAMES_SAVE 90
+#define PGB_MAX_FRAMES_SAVE (60 * 100)
 
         /* Implementation defined data. Set to NULL if not required. */
         void *priv;
     } direct;
-    
+
     uint32_t gb_cart_ram_size;
-    
+
 #if ENABLE_BGCACHE
     uint8_t *bgcache;
 
-    #if ENABLE_BGCACHE_DEFERRED
-        bool dirty_tile_data_master : 1;
-        uint32_t dirty_tile_data[0x180 / 32];
+#if ENABLE_BGCACHE_DEFERRED
+    bool dirty_tile_data_master : 1;
+    uint32_t dirty_tile_data[0x180 / 32];
 
-        // invariant: bit n is 1 iff dirty_tiles[n] nonzero.
-        uint64_t dirty_tile_rows;
+    // invariant: bit n is 1 iff dirty_tiles[n] nonzero.
+    uint64_t dirty_tile_rows;
 
-        // any tiles in the tilemap that are dirty
-        // (screen 2 at indices >= 32)
-        uint32_t dirty_tiles[64];
-    #endif
+    // any tiles in the tilemap that are dirty
+    // (screen 2 at indices >= 32)
+    uint32_t dirty_tiles[64];
+#endif
 #endif
 };
 
@@ -853,7 +853,7 @@ __core_section("bgcache") void __gb_update_bgcache_tile(
         size_t index = (tx / 2) * 4 + y * BGCACHE_STRIDE + (tx % 2);
         PGB_ASSERT(index + 2 < BGCACHE_SIZE);
         uint8_t *t = &bgcache[index];
-        
+
         t[0] = reverse_bits_u8(t1);
         t[2] = reverse_bits_u8(t2);
     }
@@ -1062,7 +1062,8 @@ __shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
             else if (gb->cart_mode_select &&
                      gb->cart_ram_bank < gb->num_ram_banks)
             {
-                size_t idx = addr - CART_RAM_ADDR + (gb->cart_ram_bank * CRAM_BANK_SIZE);
+                size_t idx =
+                    addr - CART_RAM_ADDR + (gb->cart_ram_bank * CRAM_BANK_SIZE);
                 PGB_ASSERT(idx < gb->gb_cart_ram_size);
                 gb->gb_cart_ram[idx] = val;
                 gb->direct.sram_updated |= prev != val;
@@ -1310,18 +1311,19 @@ __core_section("short") static void __gb_write(struct gb_s *gb,
 }
 
 __core_section("util") clalign
-void gb_fast_memcpy_64(void* restrict _dst, const void* restrict _src, size_t len)
+    void gb_fast_memcpy_64(void *restrict _dst, const void *restrict _src,
+                           size_t len)
 {
     PGB_ASSERT(len % 8 == 0);
     PGB_ASSERT(len > 0);
-    uint64_t* dst = _dst;
-    const uint64_t* src = _src;
+    uint64_t *dst = _dst;
+    const uint64_t *src = _src;
     do
     {
         dst[0] = src[0];
         len -= 8;
-        dst ++;
-        src ++;
+        dst++;
+        src++;
     } while (len > 0);
 }
 
@@ -1566,7 +1568,7 @@ __core_section("draw") static void __gb_draw_pixel(uint8_t *line, u8 x, u8 v)
     u8 *pix = line + x / LCD_PACKING;
     x = (x % LCD_PACKING) * (8 / LCD_PACKING);
     *pix &= ~(((1 << LCD_BITS_PER_PIXEL) - 1) << x);
-    *pix |= (v&3) << x;
+    *pix |= (v & 3) << x;
 }
 
 __core_section("draw") static u8 __gb_get_pixel(uint8_t *line, u8 x)
@@ -1769,11 +1771,12 @@ __core_section("draw") void __gb_draw_line(struct gb_s *restrict gb)
         if (obscure_x % 16 != 0)
         {
             // obscure background behind window
-            ((uint16_t*)line_priority)[wx/16] &= (0xFFFF >> obscure_x);
-            ((uint32_t*)(void*)(pixels))[wx/16] &= 0xFFFFFFFF >> (2*obscure_x);
+            ((uint16_t *)line_priority)[wx / 16] &= (0xFFFF >> obscure_x);
+            ((uint32_t *)(void *)(pixels))[wx / 16] &=
+                0xFFFFFFFF >> (2 * obscure_x);
         }
-        
-        for (int i = wx/16; i < (LCD_WIDTH)/16; ++i)
+
+        for (int i = wx / 16; i < (LCD_WIDTH) / 16; ++i)
         {
             uint32_t *out = (uint32_t *)(void *)(pixels) + i;
             uint32_t lo = hi;
@@ -1910,7 +1913,7 @@ __core_section("draw") void __gb_draw_line(struct gb_s *restrict gb)
             number_of_sprites = MAX_SPRITES_LINE;
 #endif
 
-        const uint16_t OBP = gb->gb_reg.OBP0 | ((uint16_t) gb->gb_reg.OBP1 << 8);
+        const uint16_t OBP = gb->gb_reg.OBP0 | ((uint16_t)gb->gb_reg.OBP1 << 8);
 
         /* Render each sprite, from low priority to high priority. */
 #if PEANUT_GB_HIGH_LCD_ACCURACY
@@ -2010,10 +2013,8 @@ __core_section("draw") void __gb_draw_line(struct gb_s *restrict gb)
 
                     if (!should_hide_sprite_pixel)
                     {
-                        __gb_draw_pixel(
-                            pixels, disp_x,
-                            (OBP >> (c | c_add)) & 3)
-                        ;
+                        __gb_draw_pixel(pixels, disp_x,
+                                        (OBP >> (c | c_add)) & 3);
                     }
                 }
 
@@ -4306,7 +4307,7 @@ __core static unsigned __gb_run_instruction_micro(struct gb_s *gb)
     float cycles = 1;  // use fpu register, save space
     unsigned src;
     u8 srcidx;
-    
+
     switch (opcode >> 6)
     {
     case 0:
@@ -4941,16 +4942,22 @@ __core void __gb_step_cpu(struct gb_s *gb)
         playdate->system->error("difference in gb struct on opcode %x", opcode);
         goto printregs;
     }
-    
+
     if (false)
     {
     printregs:
-        playdate->system->logToConsole("AF %x -> %x", _gb[0].cpu_reg.af, gb->cpu_reg.af);
-        playdate->system->logToConsole("BC %x -> %x", _gb[0].cpu_reg.bc, gb->cpu_reg.bc);
-        playdate->system->logToConsole("DE %x -> %x", _gb[0].cpu_reg.de, gb->cpu_reg.de);
-        playdate->system->logToConsole("HL %x -> %x", _gb[0].cpu_reg.hl, gb->cpu_reg.hl);
-        playdate->system->logToConsole("SP %x -> %x", _gb[0].cpu_reg.sp, gb->cpu_reg.sp);
-        playdate->system->logToConsole("PC %x -> %x", _gb[0].cpu_reg.pc, gb->cpu_reg.pc);
+        playdate->system->logToConsole("AF %x -> %x", _gb[0].cpu_reg.af,
+                                       gb->cpu_reg.af);
+        playdate->system->logToConsole("BC %x -> %x", _gb[0].cpu_reg.bc,
+                                       gb->cpu_reg.bc);
+        playdate->system->logToConsole("DE %x -> %x", _gb[0].cpu_reg.de,
+                                       gb->cpu_reg.de);
+        playdate->system->logToConsole("HL %x -> %x", _gb[0].cpu_reg.hl,
+                                       gb->cpu_reg.hl);
+        playdate->system->logToConsole("SP %x -> %x", _gb[0].cpu_reg.sp,
+                                       gb->cpu_reg.sp);
+        playdate->system->logToConsole("PC %x -> %x", _gb[0].cpu_reg.pc,
+                                       gb->cpu_reg.pc);
     }
 
     if (inst_cycles != inst_cycles_m)

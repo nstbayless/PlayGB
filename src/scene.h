@@ -10,8 +10,8 @@
 
 #include <stdio.h>
 
-#include "utility.h"
 #include "pd_api.h"
+#include "utility.h"
 
 typedef struct PGB_Scene
 {
@@ -19,7 +19,7 @@ typedef struct PGB_Scene
 
     float preferredRefreshRate;
     float refreshRateCompensation;
-    
+
     bool use_user_stack;
 
     void (*update)(void *object);

@@ -76,7 +76,7 @@ __dtcm_ctrl void dtcm_set_mempool(void *addr)
 #endif
 }
 
-__dtcm_ctrl bool dtcm_verify(const char* context)
+__dtcm_ctrl bool dtcm_verify(const char *context)
 {
     if (!is_dtcm_init)
         return true;
@@ -87,7 +87,9 @@ __dtcm_ctrl bool dtcm_verify(const char* context)
         if (*dtcm_low_canary_addr != DTCM_CANARY)
         {
             playdate->system->error(
-                "ERROR %s: DTCM low canary broken (decrease PLAYDATE_STACK_SIZE?)", context);
+                "ERROR %s: DTCM low canary broken (decrease "
+                "PLAYDATE_STACK_SIZE?)",
+                context);
             return false;
         }
         if (*(uint32_t *)dtcm_mempool != DTCM_CANARY)
@@ -101,21 +103,24 @@ __dtcm_ctrl bool dtcm_verify(const char* context)
     return true;
 }
 
-struct dtcm_store_t {
-    uint32_t* dtcm_low;
-    void* dtcm_mempool;
+struct dtcm_store_t
+{
+    uint32_t *dtcm_low;
+    void *dtcm_mempool;
     char data[];
 };
 
 struct dtcm_store_t *dtcm_store(void)
 {
 #ifdef DTCM_ALLOC
-    if (!is_dtcm_init) return NULL;
-    
+    if (!is_dtcm_init)
+        return NULL;
+
     size_t size = (uintptr_t)dtcm_mempool + 4 - (uintptr_t)dtcm_low_canary_addr;
-    
+
     playdate->system->logToConsole("Storing DTCM (0x%x bytes)", size);
-    struct dtcm_store_t* buff = (struct dtcm_store_t*)pgb_malloc(sizeof(struct dtcm_store_t) + size);
+    struct dtcm_store_t *buff =
+        (struct dtcm_store_t *)pgb_malloc(sizeof(struct dtcm_store_t) + size);
     buff->dtcm_low = dtcm_low_canary_addr;
     buff->dtcm_mempool = dtcm_mempool;
     memcpy(buff->data, dtcm_low_canary_addr, size);
@@ -125,9 +130,10 @@ struct dtcm_store_t *dtcm_store(void)
 #endif
 }
 
-void dtcm_restore(struct dtcm_store_t* buff)
+void dtcm_restore(struct dtcm_store_t *buff)
 {
-    if (!buff) return;
+    if (!buff)
+        return;
 #ifdef DTCM_ALLOC
     playdate->system->logToConsole("Restoring DTCM");
     dtcm_low_canary_addr = buff->dtcm_low;

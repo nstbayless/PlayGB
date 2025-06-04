@@ -6,7 +6,6 @@
  */
 
 #include "minigb_apu.h"
-#include "dtcm.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -14,6 +13,7 @@
 
 #include "../src/game_scene.h"
 #include "app.h"
+#include "dtcm.h"
 
 #define DMG_CLOCK_FREQ_U ((unsigned)DMG_CLOCK_FREQ)
 #define AUDIO_NSAMPLES (AUDIO_SAMPLES * 2u)
@@ -696,10 +696,11 @@ int audio_enabled;
 __audio int audio_callback(void *context, int16_t *left, int16_t *right,
                            int len)
 {
-    if (!audio_enabled) return 0;
-    
+    if (!audio_enabled)
+        return 0;
+
     DTCM_VERIFY_DEBUG();
-    
+
     PGB_GameScene **gameScene_ptr = context;
     PGB_GameScene *gameScene = *gameScene_ptr;
 
@@ -748,7 +749,7 @@ __audio int audio_callback(void *context, int16_t *left, int16_t *right,
         left += chunksize;
         right += chunksize;
     }
-    
+
     DTCM_VERIFY_DEBUG();
 
     return 1;

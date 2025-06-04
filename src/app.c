@@ -8,10 +8,10 @@
 #include "app.h"
 
 #include "../minigb_apu/minigb_apu.h"
+#include "dtcm.h"
 #include "game_scene.h"
 #include "library_scene.h"
 #include "preferences.h"
-#include "dtcm.h"
 #include "userstack.h"
 
 PGB_Application *PGB_App;
@@ -53,29 +53,28 @@ void PGB_init(void)
     PGB_present(libraryScene->scene);
 }
 
-__section__(".rare")
-static void switchToPendingScene()
+__section__(".rare") static void switchToPendingScene()
 {
     // present pending scene
 
-        if (PGB_App->scene)
-        {
-            preferences_save_to_disk();
+    if (PGB_App->scene)
+    {
+        preferences_save_to_disk();
 
-            void *managedObject = PGB_App->scene->managedObject;
-            PGB_App->scene->free(managedObject);
-        }
+        void *managedObject = PGB_App->scene->managedObject;
+        PGB_App->scene->free(managedObject);
+    }
 
-        PGB_App->scene = PGB_App->pendingScene;
-        PGB_App->pendingScene = NULL;
+    PGB_App->scene = PGB_App->pendingScene;
+    PGB_App->pendingScene = NULL;
 
-        PGB_Scene_refreshMenu(PGB_App->scene);
+    PGB_Scene_refreshMenu(PGB_App->scene);
 }
 
 __section__(".text.main") void PGB_update(float dt)
 {
     PGB_App->dt = dt;
-    
+
     PGB_App->crankChange = playdate->system->getCrankChange();
 
     if (PGB_App->scene)
@@ -135,8 +134,7 @@ void PGB_goToLibrary(void)
     PGB_present(libraryScene->scene);
 }
 
-__section__(".rare")
-void PGB_event(PDSystemEvent event, uint32_t arg)
+__section__(".rare") void PGB_event(PDSystemEvent event, uint32_t arg)
 {
     PGB_ASSERT(PGB_App);
     if (PGB_App->scene)

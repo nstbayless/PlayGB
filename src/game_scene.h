@@ -90,7 +90,7 @@ typedef struct PGB_GameScene
     bool debug_updatedRows[LCD_ROWS];
 #endif
 
-    lua_State* script;
+    lua_State *script;
 } PGB_GameScene;
 
 PGB_GameScene *PGB_GameScene_new(const char *rom_filename);

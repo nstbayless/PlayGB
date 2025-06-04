@@ -7,11 +7,11 @@
 
 #include "library_scene.h"
 
-#include "minigb_apu.h"
 #include "app.h"
-#include "game_scene.h"
-#include "preferences.h"
 #include "dtcm.h"
+#include "game_scene.h"
+#include "minigb_apu.h"
+#include "preferences.h"
 
 static void PGB_LibraryScene_update(void *object);
 static void PGB_LibraryScene_free(void *object);
@@ -30,7 +30,7 @@ PGB_LibraryScene *PGB_LibraryScene_new(void)
 
     PGB_LibraryScene *libraryScene = pgb_malloc(sizeof(PGB_LibraryScene));
     libraryScene->scene = scene;
-    
+
     DTCM_VERIFY_DEBUG();
 
     scene->managedObject = libraryScene;
@@ -46,7 +46,7 @@ PGB_LibraryScene *PGB_LibraryScene_new(void)
     libraryScene->listView = PGB_ListView_new();
     libraryScene->tab = PGB_LibrarySceneTabList;
     libraryScene->lastSelectedItem = -1;
-    
+
     DTCM_VERIFY_DEBUG();
 
     PGB_LibraryScene_reloadList(libraryScene);
@@ -86,9 +86,9 @@ static void PGB_LibraryScene_reloadList(PGB_LibraryScene *libraryScene)
     }
 
     array_clear(libraryScene->games);
-    
+
     DTCM_VERIFY();
-    
+
     playdate->file->listfiles(PGB_gamesPath, PGB_LibraryScene_listFiles,
                               libraryScene, 0);
 
@@ -123,7 +123,7 @@ static void PGB_LibraryScene_reloadList(PGB_LibraryScene *libraryScene)
     {
         libraryScene->tab = PGB_LibrarySceneTabEmpty;
     }
-    
+
     DTCM_VERIFY_DEBUG();
 
     PGB_ListView_reload(libraryScene->listView);
