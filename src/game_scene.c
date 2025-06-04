@@ -308,7 +308,7 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     
     char name[17];
     gb_get_rom_name(context->gb, name);
-    gameScene->script = script_begin(name, gameScene);
+    //gameScene->script = script_begin(name, gameScene);
     if (!gameScene->script)
     {
         playdate->system->logToConsole("Associated script not found.");
@@ -791,6 +791,11 @@ static void PGB_GameScene_update(void *object)
 #endif
 
         context->gb->direct.sram_updated = 0;
+
+        if (context->scene->script)
+        {
+            //call_with_user_stack_1(script_tick, context->scene->script);
+        }
 
 #ifdef DTCM_ALLOC
         DTCM_VERIFY_DEBUG();

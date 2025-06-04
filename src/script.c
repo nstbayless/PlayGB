@@ -47,8 +47,10 @@ static int pgb_close(lua_State* L) {
 
 static void register_pgb_library(lua_State* L) {
     lua_newtable(L);
-    lua_pushcfunction(L, pgb_close);
-    lua_setfield(L, -2, "close");
+    {
+        lua_pushcfunction(L, pgb_close);
+        lua_setfield(L, -2, "close");
+    }
     lua_setglobal(L, "pgb");
 }
 
@@ -222,6 +224,8 @@ void script_end(lua_State* L) {
 }
 
 void script_tick(lua_State* L) {
+    if (!L) return;
+    
     lua_getglobal(L, "pgb");
     if (!lua_istable(L, -1)) {
         lua_pop(L, 1);

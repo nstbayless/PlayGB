@@ -53,17 +53,9 @@ void PGB_init(void)
     PGB_present(libraryScene->scene);
 }
 
-__section__(".text.main") void* PGB_update_pre()
+static void switchToPendingScene()
 {
-    PGB_App->crankChange = playdate->system->getCrankChange();
-}
-
-__section__(".text.main") void* PGB_update_post()
-{
-    if (PGB_App->pendingScene)
-    {
-        DTCM_VERIFY();
-        // present pending scene
+    // present pending scene
 
         if (PGB_App->scene)
         {
@@ -77,6 +69,33 @@ __section__(".text.main") void* PGB_update_post()
         PGB_App->pendingScene = NULL;
 
         PGB_Scene_refreshMenu(PGB_App->scene);
+}
+
+__section__(".text.main") void PGB_update(float dt)
+{
+    PGB_App->dt = dt;
+    
+    PGB_App->crankChange = playdate->system->getCrankChange();
+
+    if (PGB_App->scene)
+    {
+        void *managedObject = PGB_App->scene->managedObject;
+        DTCM_VERIFY_DEBUG();
+        if (PGB_App->scene->use_user_stack)
+        {
+            call_with_user_stack_1(PGB_App->scene->update, managedObject);
+        }
+        else
+        {
+            PGB_App->scene->update(managedObject);
+        }
+        DTCM_VERIFY_DEBUG();
+    }
+
+    if (PGB_App->pendingScene)
+    {
+        DTCM_VERIFY();
+        call_with_user_stack(switchToPendingScene);
         DTCM_VERIFY();
     }
 
@@ -101,33 +120,6 @@ __section__(".text.main") void* PGB_update_post()
     }
 
 #endif
-}
-
-__section__(".text.main") void PGB_update(float dt)
-{
-    PGB_App->dt = dt;
-    
-    DTCM_VERIFY_DEBUG();
-    call_with_user_stack(PGB_update_pre);
-    DTCM_VERIFY_DEBUG();
-
-    if (PGB_App->scene)
-    {
-        void *managedObject = PGB_App->scene->managedObject;
-        DTCM_VERIFY_DEBUG();
-        if (PGB_App->scene->use_user_stack)
-        {
-            call_with_user_stack_1(PGB_App->scene->update, managedObject);
-        }
-        else
-        {
-            PGB_App->scene->update(managedObject);
-        }
-        DTCM_VERIFY_DEBUG();
-    }
-
-    DTCM_VERIFY_DEBUG();
-    call_with_user_stack(PGB_update_post);
     DTCM_VERIFY_DEBUG();
 }
 
