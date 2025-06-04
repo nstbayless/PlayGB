@@ -476,6 +476,12 @@ int _gettimeofday(struct timeval* tv, void* tz) {
 static char *__env[1] = { 0 };
 char **_environ = __env;
 
+int _link(char* oldpath, char* newpath) {
+	// TODO
+    errno = EMLINK;
+    return -1;
+}
+
 #else
 
 int eventHandler_pdnewlib(PlaydateAPI* p, PDSystemEvent e, uint32_t a)

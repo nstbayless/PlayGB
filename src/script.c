@@ -16,8 +16,10 @@
 #include "app.h"
 #include "dtcm.h"
 #include "script.h"
+#include "game_scene.h"
+#include "../peanut_gb/peanut_gb.h"
 
-#ifdef LUA
+#ifndef NOLUA
 
 #define REGISTRY_GAME_SCENE_KEY "PGB_GameScene"
 
@@ -35,6 +37,73 @@ static struct PGB_GameScene *get_game_scene(lua_State *L)
     struct PGB_GameScene *scene = (struct PGB_GameScene *)lua_touserdata(L, -1);
     lua_pop(L, 1);
     return scene;
+}
+
+static struct gb_s *get_gb(lua_State *L)
+{
+    return get_game_scene(L)->context->gb;
+}
+
+static int pgb_rom_poke(lua_State *L)
+{
+    if (!lua_check_args(L, 2, 2))
+    {
+        return luaL_error(L, "pgb.rom_poke(addr, value) takes two arguments");
+    }
+    
+    struct gb_s* gb = get_gb(L);
+    
+    int addr = luaL_checkinteger(L, 1);
+    int value = luaL_checkinteger(L, 2);
+    size_t rom_size = 0x4000*(gb->num_rom_banks_mask+1);
+    
+    if (addr < 0 || addr >= rom_size)
+    {
+        return luaL_error(L, "pgb.rom_poke: addr out of range (0-%x)", rom_size - 1);
+    }
+    
+    gb->gb_rom[addr] = value;
+    return 0;
+}
+
+static int pgb_rom_peek(lua_State *L)
+{
+    if (!lua_check_args(L, 1, 1))
+    {
+        return luaL_error(L, "pgb.rom_peek(addr) takes one argument");
+    }
+    
+    struct gb_s* gb = get_gb(L);
+    
+    int addr = luaL_checkinteger(L, 1);
+    size_t rom_size = 0x4000 * (gb->num_rom_banks_mask + 1);
+    
+    if (addr < 0 || addr >= rom_size)
+    {
+        return luaL_error(L, "pgb.rom_peek: addr out of range (0-%x)", rom_size - 1);
+    }
+    
+    lua_pushinteger(L, gb->gb_rom[addr]);
+    return 1;
+}
+
+static int pgb_get_crank(lua_State *L)
+{
+    if (playdate->system->isCrankDocked()) return 0;
+    
+    float angle = playdate->system->getCrankAngle();
+    lua_pushnumber(L, angle);
+    return 1;
+}
+
+static int pgb_setCrankSoundsDisabled(lua_State *L)
+{
+    if (playdate->system->isCrankDocked()) return 0;
+    
+    // get boolean value
+    int disabled = lua_toboolean(L, 1);
+    playdate->system->setCrankSoundsDisabled(disabled);
+    return 0;
 }
 
 static int pgb_close(lua_State *L)
@@ -57,6 +126,18 @@ static void register_pgb_library(lua_State *L)
     {
         lua_pushcfunction(L, pgb_close);
         lua_setfield(L, -2, "close");
+        
+        lua_pushcfunction(L, pgb_rom_poke);
+        lua_setfield(L, -2, "rom_poke");
+        
+        lua_pushcfunction(L, pgb_rom_peek);
+        lua_setfield(L, -2, "rom_peek");
+        
+        lua_pushcfunction(L, pgb_get_crank);
+        lua_setfield(L, -2, "get_crank");
+        
+        lua_pushcfunction(L, pgb_setCrankSoundsDisabled);
+        lua_setfield(L, -2, "setCrankSoundsDisabled");
     }
     lua_setglobal(L, "pgb");
 }

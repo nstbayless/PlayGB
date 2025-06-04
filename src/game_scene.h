@@ -11,6 +11,7 @@
 #include <math.h>
 #include <stdio.h>
 
+#include "peanut_gb.h"
 #include "scene.h"
 
 typedef struct PGB_GameSceneContext PGB_GameSceneContext;
@@ -65,6 +66,28 @@ typedef struct
     int start_pulse_countdown;
     int select_pulse_countdown;
 } PGB_CrankSelector;
+
+struct gb_s;
+
+typedef struct PGB_GameSceneContext
+{
+    PGB_GameScene *scene;
+    struct gb_s *gb;
+    uint8_t wram[WRAM_SIZE];
+    uint8_t vram[VRAM_SIZE];
+    uint8_t *rom;
+    uint8_t *cart_ram;
+    uint8_t
+        previous_lcd[LCD_HEIGHT *
+                     LCD_WIDTH_PACKED];  // Buffer for the previous frame's LCD
+    bool line_has_changed[LCD_HEIGHT];   // Flags for changed lines
+
+    uint8_t frames_to_skip_drawing;
+    uint8_t frames_actually_skipped_drawing;
+    uint8_t frames_emulated_since_adjustment;
+    float total_time_for_adjustment_period_ms;
+    int buttons_held_since_start; // buttons that have been down since the start of the game
+} PGB_GameSceneContext;
 
 typedef struct PGB_GameScene
 {

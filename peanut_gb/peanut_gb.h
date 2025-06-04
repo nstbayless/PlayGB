@@ -544,6 +544,8 @@ struct gb_s
 #endif
 };
 
+#ifdef PGB_IMPL
+
 /**
  * Tick the internal RTC by one second.
  * This was taken from SameBoy, which is released under MIT Licence.
@@ -5512,4 +5514,5 @@ __shell static u8 __gb_rare_instruction(struct gb_s *restrict gb,
     }
 }
 
+#endif
 #endif  // PEANUT_GB_H

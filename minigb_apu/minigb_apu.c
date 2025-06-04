@@ -21,8 +21,13 @@
 #define AUDIO_MEM_SIZE (0xFF40 - 0xFF10)
 #define AUDIO_ADDR_COMPENSATION 0xFF10
 
-#define MAX(a, b) (a > b ? a : b)
-#define MIN(a, b) (a <= b ? a : b)
+#ifndef MAX
+    #define MAX(a, b) (a > b ? a : b)
+#endif
+
+#ifndef MIN
+    #define MIN(a, b) (a <= b ? a : b)
+#endif
 
 #define VOL_INIT_MAX (INT16_MAX / 8)
 #define VOL_INIT_MIN (INT16_MIN / 8)

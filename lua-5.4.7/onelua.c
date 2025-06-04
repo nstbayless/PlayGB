@@ -11,7 +11,7 @@
 **
 */
 
-#ifdef LUA
+#ifndef NOLUA
 
 #pragma GCC optimize ("Os")
 

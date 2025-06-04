@@ -5,7 +5,7 @@
 //  Created by Matteo D'Ignazio on 14/05/22.
 //
 
-#include "game_scene.h"
+#define PGB_IMPL
 
 #include "../minigb_apu/minigb_apu.h"
 #include "../peanut_gb/peanut_gb.h"
@@ -17,6 +17,8 @@
 #include "userstack.h"
 #include "utility.h"
 
+#include "game_scene.h"
+
 static const float TARGET_TIME_PER_GB_FRAME_MS = 1000.0f / 59.73f;
 static const float PERFORMANCE_SKIP_OVERRIDE_FACTOR = 0.99f;
 static uint8_t MAX_CONSECUTIVE_DRAW_SKIPS = 0;
@@ -24,25 +26,6 @@ static const uint8_t ADJUSTMENT_PERIOD_FRAMES = 60;
 static const int PULSE_DURATION = 15;
 
 PGB_GameScene *audioGameScene = NULL;
-
-typedef struct PGB_GameSceneContext
-{
-    PGB_GameScene *scene;
-    struct gb_s *gb;
-    uint8_t wram[WRAM_SIZE];
-    uint8_t vram[VRAM_SIZE];
-    uint8_t *rom;
-    uint8_t *cart_ram;
-    uint8_t
-        previous_lcd[LCD_HEIGHT *
-                     LCD_WIDTH_PACKED];  // Buffer for the previous frame's LCD
-    bool line_has_changed[LCD_HEIGHT];   // Flags for changed lines
-
-    uint8_t frames_to_skip_drawing;
-    uint8_t frames_actually_skipped_drawing;
-    uint8_t frames_emulated_since_adjustment;
-    float total_time_for_adjustment_period_ms;
-} PGB_GameSceneContext;
 
 static void PGB_GameScene_selector_init(PGB_GameScene *gameScene);
 static void PGB_GameScene_update(void *object);
@@ -198,6 +181,11 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     context->scene = gameScene;
     context->rom = NULL;
     context->cart_ram = NULL;
+    
+    
+    PDButtons current_pd_buttons;
+    playdate->system->getButtonState(&current_pd_buttons, NULL, NULL);
+    context->buttons_held_since_start = current_pd_buttons;
 
     context->frames_to_skip_drawing = 0;
     context->frames_actually_skipped_drawing = 0;
@@ -310,13 +298,13 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
         gameScene->error = romError;
     }
 
-    #ifdef LUA
+    #ifndef NOLUA
     char name[17];
     gb_get_rom_name(context->gb, name);
     gameScene->script = script_begin(name, gameScene);
     if (!gameScene->script)
     {
-        playdate->system->logToConsole("Associated script not found.");
+        playdate->system->logToConsole("Associated script failed to load or not found.");
     }
     #endif
     DTCM_VERIFY();
@@ -863,6 +851,13 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 
         PDButtons current_pd_buttons;
         playdate->system->getButtonState(&current_pd_buttons, NULL, NULL);
+        
+        // mask out buttons that have been held down since the game started
+        context->buttons_held_since_start &= current_pd_buttons;
+        
+    #if 0
+        current_pd_buttons &= ~context->buttons_held_since_start;
+    #endif
 
         bool gb_joypad_start_is_active_low =
             !(gameScene->selector.startPressed);
@@ -894,7 +889,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 
         context->gb->direct.sram_updated = 0;
 
-    #ifdef LUA
+    #ifndef NOLUA
         if (context->scene->script)
         {
             script_tick(context->scene->script);
