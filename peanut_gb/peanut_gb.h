@@ -841,12 +841,12 @@ __core_section("bgcache") void __gb_update_bgcache_tile(
     int tile_data_addr =
         0x1000 * (addr_mode && tile < 128) | ((int)tile) * 0x10;
     uint8_t *bgcache = gb->bgcache + addr_mode * (BGCACHE_SIZE / 2);
-    uint8_t *vram = gb->vram;
-    for (int tline = 0; tline < 8; ++tline)
+    uint8_t *vram = &gb->vram[tile_data_addr];
+    for (int tline = 0; tline < 8; tline += 2)
     {
         int y = tline + ty * 8;
-        unsigned t1 = vram[tile_data_addr + 2 * tline];
-        unsigned t2 = vram[tile_data_addr + 2 * tline + 1];
+        unsigned t1 = vram[2 * tline];
+        unsigned t2 = vram[2 * tline + 1];
 
         // bgcache format: each 32 bits is a pair of 16 bit low color, 16 bit hi
         // color
@@ -1307,6 +1307,22 @@ __core_section("short") static void __gb_write(struct gb_s *gb,
         return;
     }
     __gb_write_full(gb, addr, v);
+}
+
+__core_section("util") clalign
+void gb_fast_memcpy_64(void* restrict _dst, const void* restrict _src, size_t len)
+{
+    PGB_ASSERT(len % 8 == 0);
+    PGB_ASSERT(len > 0);
+    uint64_t* dst = _dst;
+    const uint64_t* src = _src;
+    do
+    {
+        dst[0] = src[0];
+        len -= 8;
+        dst ++;
+        src ++;
+    } while (len > 0);
 }
 
 __core_section("short") static uint16_t

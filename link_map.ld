@@ -34,6 +34,11 @@ SECTIONS
 		*(.text.pgb)
 
 		. = ALIGN(32);
+		build/*(.text)
+		build/*(.text.*)
+		
+		. = ALIGN(32);
+		/* libc */
 		*(.text)
 		*(.text.*)
 		

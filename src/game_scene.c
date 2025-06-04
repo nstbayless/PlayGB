@@ -901,7 +901,7 @@ static void PGB_GameScene_update(void *object)
                     context->line_has_changed,
                     playdate->graphics->markUpdatedRows);
 
-                memcpy(context->previous_lcd, current_lcd,
+                ITCM_CORE_FN(gb_fast_memcpy_64)(context->previous_lcd, current_lcd,
                        LCD_HEIGHT * LCD_WIDTH_PACKED);
             }
         }
