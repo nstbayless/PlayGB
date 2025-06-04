@@ -18,7 +18,7 @@
 #include "utility.h"
 
 static const float TARGET_TIME_PER_GB_FRAME_MS = 1000.0f / 59.73f;
-static const float PERFORMANCE_SKIP_OVERRIDE_FACTOR = 0.95f;
+static const float PERFORMANCE_SKIP_OVERRIDE_FACTOR = 0.99f;
 static uint8_t MAX_CONSECUTIVE_DRAW_SKIPS = 0;
 static const uint8_t ADJUSTMENT_PERIOD_FRAMES = 60;
 static const int PULSE_DURATION = 15;
