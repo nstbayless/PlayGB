@@ -13,6 +13,12 @@ GROUP(libgcc.a libc.a libm.a)
 	The emulator's performance seems very sensitive to the location of
 	some functions, so we specify their alignment precisely simply for
 	stability.
+	
+	The performance loterry is also influenced by branch prediction.
+	Branch prediction seems to be based on bits modulo 0x1000, so this
+	provides extra stability:
+	
+	. = ALIGN(0x1000);
 */
 
 SECTIONS
@@ -50,7 +56,7 @@ SECTIONS
 		
 		/* code to copy to TCM, seemingly runs faster */
 		. = ALIGN(0x1000);
-		. += 0x6;
+		. += 0xDE6;
         __itcm_start = .;
 		*(.itcm.short)
 		*(.itcm)
@@ -65,7 +71,7 @@ SECTIONS
 	    *(.itcm.*)
         __itcm_end = .;
 		
-		. = ALIGN(32);
+		. = ALIGN(0x1000);
 		__audio_start__ = .;
 		*(.audio)
 		*(.audio.*)
