@@ -17,10 +17,8 @@ VPATH += peanut_gb
 VPATH += minigb_apu
 
 # List C source files here
-SRC += minigb_apu/minigb_apu.c
-
-SRC += main.c
-SRC += pdnewlib.c
+SRC += src/userstack.c
+SRC += src/script.c
 SRC += src/dtcm.c
 SRC += src/revcheck.c
 SRC += src/app.c
@@ -32,6 +30,12 @@ SRC += src/array.c
 SRC += src/listview.c
 SRC += src/preferences.c
 
+SRC += minigb_apu/minigb_apu.c
+SRC += main.c
+SRC += pdnewlib.c
+
+SRC += lua-5.4.7/onelua.c
+
 ASRC = setup.s
 
 # List all user directories here
@@ -39,6 +43,7 @@ UINCDIR += src
 UINCDIR += peanut_gb
 UINCDIR += minigb_apu
 UINCDIR += lcd
+UINCDIR += lua-5.4.7
 
 
 # Note: if there are unexplained crashes, try disabling these.

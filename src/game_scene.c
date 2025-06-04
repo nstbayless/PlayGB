@@ -7,6 +7,7 @@
 
 #include "game_scene.h"
 
+#include "script.h"
 #include "../minigb_apu/minigb_apu.h"
 #include "../peanut_gb/peanut_gb.h"
 #include "app.h"
@@ -14,6 +15,7 @@
 #include "preferences.h"
 #include "revcheck.h"
 #include "utility.h"
+#include "userstack.h"
 
 static const float TARGET_TIME_PER_GB_FRAME_MS = 1000.0f / 59.73f;
 static const float PERFORMANCE_SKIP_OVERRIDE_FACTOR = 0.95f;
@@ -124,6 +126,7 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     scene->menu = PGB_GameScene_menu;
     scene->free = PGB_GameScene_free;
     scene->event = PGB_GameScene_event;
+    scene->use_user_stack = 0; // user stack is slower
 
     scene->preferredRefreshRate = 30;
 
@@ -302,6 +305,15 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
         gameScene->state = PGB_GameSceneStateError;
         gameScene->error = romError;
     }
+    
+    char name[17];
+    gb_get_rom_name(context->gb, name);
+    gameScene->script = script_begin(name, gameScene);
+    if (!gameScene->script)
+    {
+        playdate->system->logToConsole("Associated script not found.");
+    }
+    DTCM_VERIFY();
 
     return gameScene;
 }
@@ -1249,7 +1261,7 @@ static void save_check(struct gb_s *gb)
     }
 }
 
-static void PGB_GameScene_didSelectLibrary(void *userdata)
+void PGB_GameScene_didSelectLibrary(void *userdata)
 {
     DTCM_VERIFY();
     
@@ -1257,7 +1269,7 @@ static void PGB_GameScene_didSelectLibrary(void *userdata)
 
     gameScene->audioLocked = true;
 
-    PGB_goToLibrary();
+    call_with_user_stack(PGB_goToLibrary);
     
     DTCM_VERIFY();
 }

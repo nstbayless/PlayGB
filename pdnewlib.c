@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/times.h>
 #include <errno.h>
 #ifdef errno
 	#undef errno
@@ -155,11 +157,14 @@ int _write(int handle, char* data, int size)
 
 int _read(int file, char* ptr, int len)
 {
+	pd->system->logToConsole("_read");
 	return 0;
 }
 
 int _open(const char *name, int flags, int mode)
 {
+	pd->system->logToConsole("_open %s", name);
+	
   	for (size_t i = 0; i < MAXFILES; ++i)
 	{
 		if (!openfiles[i])
@@ -263,6 +268,7 @@ int _lseek(int file, int pos, int whence) {
 }
 
 int _fstat(int file, struct stat *st) {
+	pd->system->logToConsole("_fstat");
 	memset(stat, 0, sizeof(stat));
 	if (_isatty(file))
 	{
@@ -278,6 +284,7 @@ int _fstat(int file, struct stat *st) {
 }
 
 int _stat(char *file, struct stat *st) {
+	pd->system->logToConsole("_stat \"%s\"", file);
 	memset(stat, 0, sizeof(stat));
 	FileStat pdstat;
 	
@@ -296,6 +303,33 @@ int _stat(char *file, struct stat *st) {
 	st->st_ctime = st->st_ctime;
   	return 0;
 }
+
+clock_t _times(struct tms* buf) {
+    // Get time in milliseconds since system start
+    uint32_t ms = pd->system->getCurrentTimeMilliseconds();
+    clock_t ticks = (clock_t)(ms / 10);  // pretend 1 tick = 10 ms = 100 Hz
+
+    if (buf) {
+        buf->tms_utime  = ticks;
+        buf->tms_stime  = 0;
+        buf->tms_cutime = 0;
+        buf->tms_cstime = 0;
+    }
+
+    return ticks;
+}
+
+int _gettimeofday(struct timeval* tv, void* tz) {
+    (void)tz;  // timezone is obsolete and unused
+
+    uint32_t ms = pd->system->getCurrentTimeMilliseconds();
+    if (tv) {
+        tv->tv_sec = ms / 1000;
+        tv->tv_usec = (ms % 1000) * 1000;
+    }
+    return 0;
+}
+
 
 static char *__env[1] = { 0 };
 char **_environ = __env;

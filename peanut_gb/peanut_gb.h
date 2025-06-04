@@ -1550,7 +1550,7 @@ __core_section("draw") static void __gb_draw_pixel(uint8_t *line, u8 x, u8 v)
     u8 *pix = line + x / LCD_PACKING;
     x = (x % LCD_PACKING) * (8 / LCD_PACKING);
     *pix &= ~(((1 << LCD_BITS_PER_PIXEL) - 1) << x);
-    *pix |= v << x;
+    *pix |= (v&3) << x;
 }
 
 __core_section("draw") static u8 __gb_get_pixel(uint8_t *line, u8 x)
@@ -1966,11 +1966,11 @@ __core_section("draw") void __gb_draw_line(struct gb_s *restrict gb)
             t1 >>= shift;
             t2 >>= shift;
 
-            uint8_t c_add = (OF & OBJ_PALETTE) ? 4 : 0;
+            uint8_t c_add = (OF & OBJ_PALETTE) ? 8 : 0;
 
             for (uint8_t disp_x = start; disp_x != end; disp_x += dir)
             {
-                uint8_t c = (t1 & 0x1) | ((t2 & 0x1) << 1);
+                uint8_t c = ((t1 & 0x1) << 1) | ((t2 & 0x1) << 2);
                 // check transparency / sprite overlap / background overlap
                 if (c != 0)  // Sprite palette index 0 is transparent
                 {

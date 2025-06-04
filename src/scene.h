@@ -19,6 +19,8 @@ typedef struct PGB_Scene
 
     float preferredRefreshRate;
     float refreshRateCompensation;
+    
+    bool use_user_stack;
 
     void (*update)(void *object);
     void (*menu)(void *object);
