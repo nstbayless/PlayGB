@@ -193,7 +193,19 @@ typedef int16_t s16;
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+#define PGB_HW_BREAKPOINT_OPCODE 0xD3
+#define MAX_BREAKPOINTS 0x80
+
 #define PEANUT_GB_ARRAYSIZE(array) (sizeof(array) / sizeof(array[0]))
+
+typedef struct gb_breakpoint
+{
+    // -1 to disable
+    uint32_t rom_addr : 24;
+    
+    // what byte was replaced?
+    char opcode;
+} gb_breakpoint;
 
 struct cpu_registers_s
 {
@@ -526,6 +538,8 @@ struct gb_s
     } direct;
 
     uint32_t gb_cart_ram_size;
+    
+    gb_breakpoint* breakpoints;
 
 #if ENABLE_BGCACHE
     uint8_t *bgcache;
@@ -4853,7 +4867,13 @@ __core void __gb_step_cpu(struct gb_s *gb)
     inst_cycles = __gb_run_instruction_micro(gb);
 #else
     // run once as each, verify
-
+    
+    if (gb->cpu_reg.pc < 0x8000 && __gb_read_full(gb, gb->cpu_reg.pc) == PGB_HW_BREAKPOINT_OPCODE)
+    {
+        // can't validate if breakpoint.
+        __gb_run_instruction_micro(gb);
+    }
+    else {
     static u8 _wram[2][WRAM_SIZE];
     static u8 _vram[2][VRAM_SIZE];
     static u8 _cart_ram[2][0x20000];
@@ -4968,6 +4988,7 @@ __core void __gb_step_cpu(struct gb_s *gb)
         playdate->system->error(
             "cycle difference on opcode %x (expected %d, was %d)", opcode,
             inst_cycles, inst_cycles_m);
+    }
     }
 #endif
 
@@ -5199,6 +5220,7 @@ uint8_t gb_colour_hash(struct gb_s *gb)
 /**
  * Resets the context, and initialises startup values.
  */
+__section__(".rare")
 void gb_reset(struct gb_s *gb)
 {
     gb->gb_halt = 0;
@@ -5264,6 +5286,7 @@ void gb_reset(struct gb_s *gb)
  * Initialise the emulator context. gb_reset() is also called to initialise
  * the CPU.
  */
+__section__(".rare")
 enum gb_init_error_e gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram,
                              uint8_t *lcd, uint8_t *gb_rom,
                              void (*gb_error)(struct gb_s *,
@@ -5324,6 +5347,9 @@ enum gb_init_error_e gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram,
     gb->gb_rom = gb_rom;
     gb->gb_error = gb_error;
     gb->direct.priv = priv;
+    static gb_breakpoint breakpoints[MAX_BREAKPOINTS];
+    memset(breakpoints, 0xFF, sizeof(breakpoints));
+    gb->breakpoints = breakpoints;
 
     /* Initialise serial transfer function to NULL. If the front-end does
      * not provide serial support, Peanut-GB will emulate no cable connected
@@ -5397,6 +5423,88 @@ const char *gb_get_rom_name(struct gb_s *gb, char *title_str)
     return title_start;
 }
 
+void __gb_on_breakpoint(struct gb_s *gb, int breakpoint_number);
+
+static unsigned __gb_run_instruction_micro(struct gb_s *gb);
+
+// returns negative if failure
+// returns breakpoint index otherwise
+__section__(".rare")
+int set_hw_breakpoint(struct gb_s *gb, uint32_t rom_addr)
+{
+    size_t rom_size = 0x4000*(gb->num_rom_banks_mask+1);
+    if (rom_addr > rom_size) return -2;
+    
+    for (size_t i = 0; i < MAX_BREAKPOINTS; ++i)
+    {
+        if (gb->breakpoints[i].rom_addr != 0xFFFFFF) continue;
+        
+        // found a breakpoint slot to use
+        gb->breakpoints[i].rom_addr = rom_addr;
+        gb->breakpoints[i].opcode = gb->gb_rom[rom_addr];
+        gb->gb_rom[rom_addr] = PGB_HW_BREAKPOINT_OPCODE;
+        return i;
+    }
+    
+    // couldn't find a breakpoint
+    return -1;
+}
+
+// returns 0 if no breakpoint at current location
+// returns cycles executed if breakpoint existed (runs breakpoint)
+static __section__(".rare")
+int __gb_try_breakpoint(struct gb_s *gb)
+{
+    // only ROM-address breakpoints are supported
+    size_t pc = gb->cpu_reg.pc - 1;
+    if (pc >= 0x8000) return 0;
+    size_t rom_addr = (pc < 0x4000)
+        ? pc
+        : (pc % 0x4000) | ((gb->selected_rom_bank & gb->num_rom_banks_mask) * ROM_BANK_SIZE);
+    
+    for (int i = 0; i < MAX_BREAKPOINTS; ++i)
+    {
+        int bp_addr = gb->breakpoints[i].rom_addr;
+        int opcode = gb->breakpoints[i].opcode;
+        if ((rom_addr & 0xFFFFFF) != bp_addr) continue;
+        // breakpoint found!
+        
+        if unlikely(opcode == PGB_HW_BREAKPOINT_OPCODE)
+        {
+            // this is pretty messed up, but let's handle it gracefully
+            __gb_on_breakpoint(gb, gb->cpu_reg.pc);
+            return 4;
+        }
+        else
+        {
+            // restore to before running the breakpoint
+            gb->gb_rom[rom_addr] = opcode;
+            uint16_t prev_pc = --gb->cpu_reg.pc;
+            uint16_t prev_bank = gb->selected_rom_bank;
+            
+            // handle breakpoint
+            __gb_on_breakpoint(gb, gb->cpu_reg.pc);
+            
+            int cycles = 0;
+            
+            // if bank,PC did not change, perform replaced instruction
+            if (prev_pc == gb->cpu_reg.pc && prev_bank == gb->selected_rom_bank)
+            {
+                cycles = __gb_run_instruction_micro(gb);
+            }
+            
+            // restore breakpoint
+            gb->breakpoints[i].opcode = gb->gb_rom[rom_addr];
+            gb->gb_rom[rom_addr] = PGB_HW_BREAKPOINT_OPCODE;
+            return cycles <= 0 ? 4 : cycles;
+        }
+        
+        return 1;
+    }
+    
+    return 0;
+}
+
 #if ENABLE_LCD
 
 void gb_init_lcd(struct gb_s *gb)
@@ -5468,6 +5576,18 @@ __shell static u8 __gb_rare_instruction(struct gb_s *restrict gb,
         gb->gb_halt = 1;
     }
         return 1 * 4;
+        #if 0
+    case PGB_HW_BREAKPOINT_OPCODE:
+        {
+            int rv = __gb_try_breakpoint(gb);
+            if (rv <= 0)
+            {
+                goto invalid_opcode;
+            }
+            return rv;
+        }
+        break;
+        #endif
     case 0xE0:
         __gb_write(gb, 0xFF00 | __gb_read(gb, gb->cpu_reg.pc++), gb->cpu_reg.a);
         return 3 * 4;
@@ -5508,6 +5628,7 @@ __shell static u8 __gb_rare_instruction(struct gb_s *restrict gb,
         gb->gb_ime = 1;
         return 1 * 4;
     default:
+    invalid_opcode:
         (gb->gb_error)(gb, GB_INVALID_OPCODE, opcode);
         gb->gb_frame = 1;
         return 1 * 4;  // ?

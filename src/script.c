@@ -67,6 +67,52 @@ static int pgb_rom_poke(lua_State *L)
     return 0;
 }
 
+int set_hw_breakpoint(struct gb_s *gb, uint32_t rom_addr);
+static int pgb_rom_set_breakpoint(lua_State *L)
+{
+    // returns: breakpoint index, or null on failure
+    if (!lua_check_args(L, 2, 2))
+    {
+        return luaL_error(L, "pgb.rom_set_breakpoint(addr, function) takes two arguments");
+    }
+    
+    struct gb_s* gb = get_gb(L);
+    int addr = luaL_checkinteger(L, 1);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    size_t rom_size = 0x4000 * (gb->num_rom_banks_mask + 1);
+    
+    if (addr < 0 || addr >= rom_size)
+    {
+        return luaL_error(L, "pgb.rom_set_breakpoint: addr out of range (0-%x)", rom_size - 1);
+    }
+    int breakpoint_index = set_hw_breakpoint(gb, addr);
+    if (breakpoint_index == -1)
+    {
+        return luaL_error(L, "pgb.rom_set_breakpoint: too many breakpoints set");
+    }
+    else if (breakpoint_index < 0)
+    {
+        return luaL_error(L, "pgb.rom_set_breakpoint: failed to set breakpoint at addr %x", addr);
+    }
+    
+    // store the function in a table in the registry
+    lua_getfield(L, LUA_REGISTRYINDEX, "pgb_breakpoints");
+    if (!lua_istable(L, -1))
+    {
+        lua_newtable(L);
+        lua_setfield(L, LUA_REGISTRYINDEX, "pgb_breakpoints");
+        lua_getfield(L, LUA_REGISTRYINDEX, "pgb_breakpoints");
+    }
+    
+    lua_pushinteger(L, breakpoint_index);
+    lua_pushvalue(L, 2);  // push the function
+    lua_settable(L, -3);  // set the function in the table with the breakpoint index as key
+    
+    lua_pop(L, 1);  // pop the table
+    lua_pushinteger(L, breakpoint_index);  // return the breakpoint index
+    return 1;
+}
+
 static int pgb_rom_peek(lua_State *L)
 {
     if (!lua_check_args(L, 1, 1))
@@ -136,7 +182,10 @@ static void register_pgb_library(lua_State *L)
 
         lua_pushcfunction(L, pgb_rom_peek);
         lua_setfield(L, -2, "rom_peek");
-
+        
+        lua_pushcfunction(L, pgb_rom_set_breakpoint);
+        lua_setfield(L, -2, "rom_set_breakpoint");
+        
         lua_pushcfunction(L, pgb_get_crank);
         lua_setfield(L, -2, "get_crank");
 

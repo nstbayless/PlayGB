@@ -1394,3 +1394,8 @@ static void PGB_GameScene_free(void *object)
     pgb_free(gameScene);
     DTCM_VERIFY_DEBUG();
 }
+
+__section__(".rare")
+void __gb_on_breakpoint(struct gb_s *gb, int breakpoint_number)
+{
+}
