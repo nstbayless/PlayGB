@@ -212,8 +212,6 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 
             read_cart_ram_file(save_filename, &context->cart_ram,
                                gb_get_save_size(context->gb));
-            
-            gb->gb_save_to_disk = gb_save_to_disk;
 
             context->gb->gb_cart_ram = context->cart_ram;
             context->gb->gb_cart_ram_size = gb_get_save_size(context->gb);
@@ -642,7 +640,10 @@ __core_section("fb") void update_fb_dirty_lines(
     }
 }
 
-__section__(".text.tick") __space static void PGB_GameScene_update(void *object)
+static void save_check(struct gb_s *gb);
+
+__section__(".text.tick") __space
+static void PGB_GameScene_update(void *object)
 {
     PGB_GameScene *gameScene = object;
     PGB_GameSceneContext *context = gameScene->context;
@@ -766,6 +767,8 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         memset(gameScene->debug_updatedRows, 0, LCD_ROWS);
 #endif
 
+        context->gb->direct.sram_updated = 0;
+
 #ifdef DTCM_ALLOC
         ITCM_CORE_FN(gb_run_frame)(context->gb);
 #else
@@ -777,6 +780,11 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 
         memcpy(context->gb, &gb, sizeof(struct gb_s));
 #endif
+
+        if (context->gb->cart_battery && context->gb->direct.sram_dirty)
+        {
+            save_check(context->gb);
+        }
 
         // --- 1. Dynamic Frame Skipping Decision ---
         bool should_draw_this_frame = true;
@@ -1191,6 +1199,43 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
     }
 }
 
+__section__(".text.tick") __space
+static void save_check(struct gb_s *gb)
+{
+    static 
+    uint32_t frames_since_last_save,
+    frames_since_sram_update;
+    
+    // save SRAM under some conditions
+    // TODO: also save if menu opens, playdate goes to sleep, app closes, or powers down
+    gb->direct.sram_dirty |= gb->direct.sram_updated;
+    ++frames_since_last_save;
+    if (gb->cart_battery && gb->direct.sram_dirty)
+    {
+        if (frames_since_last_save >= PGB_MAX_FRAMES_SAVE)
+        {
+            playdate->system->logToConsole("Saving (periodic)");
+            gb_save_to_disk(gb);
+            frames_since_last_save = 0;
+            frames_since_sram_update = 0;
+        }
+        else if (!gb->direct.sram_updated)
+        {
+            if (frames_since_sram_update >= PGB_MIN_FRAMES_SAVE)
+            {
+                playdate->system->logToConsole("Saving (gap since last ram edit)");
+                gb_save_to_disk(gb);
+                frames_since_last_save = 0;
+            }
+            frames_since_sram_update = 0;
+        }
+    }
+    else
+    {
+        frames_since_sram_update++;
+    }
+}
+
 static void PGB_GameScene_didSelectLibrary(void *userdata)
 {
     PGB_GameScene *gameScene = userdata;
@@ -1330,6 +1375,7 @@ static void PGB_GameScene_generateBitmask(void)
     }
 }
 
+__section__(".rare")
 static void PGB_GameScene_event(void *object, PDSystemEvent event, uint32_t arg)
 {
     PGB_GameScene *gameScene = object;

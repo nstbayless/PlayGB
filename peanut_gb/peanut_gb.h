@@ -388,9 +388,6 @@ struct gb_s
      * \param val           arbitrary value related to error
      */
     void (*gb_error)(struct gb_s *, const enum gb_error_e, const uint16_t val);
-    
-    // Notify front-end to save cartridge SRAM to disk
-    void (*gb_save_to_disk)(struct gb_s *);
 
     /* Transmit one byte and return the received byte. */
     void (*gb_serial_tx)(struct gb_s *, const uint8_t tx);
@@ -532,8 +529,6 @@ struct gb_s
         
         #define PGB_MIN_FRAMES_SAVE 90
         #define PGB_MAX_FRAMES_SAVE (60 * 100)
-        uint32_t frames_since_last_save;
-        uint32_t frames_since_sram_update;
 
         /* Implementation defined data. Set to NULL if not required. */
         void *priv;
@@ -541,20 +536,20 @@ struct gb_s
     
     uint32_t gb_cart_ram_size;
     
-    #if ENABLE_BGCACHE
+#if ENABLE_BGCACHE
     uint8_t *bgcache;
 
-#if ENABLE_BGCACHE_DEFERRED
-    bool dirty_tile_data_master : 1;
-    uint32_t dirty_tile_data[0x180 / 32];
+    #if ENABLE_BGCACHE_DEFERRED
+        bool dirty_tile_data_master : 1;
+        uint32_t dirty_tile_data[0x180 / 32];
 
-    // invariant: bit n is 1 iff dirty_tiles[n] nonzero.
-    uint64_t dirty_tile_rows;
+        // invariant: bit n is 1 iff dirty_tiles[n] nonzero.
+        uint64_t dirty_tile_rows;
 
-    // any tiles in the tilemap that are dirty
-    // (screen 2 at indices >= 32)
-    uint32_t dirty_tiles[64];
-#endif
+        // any tiles in the tilemap that are dirty
+        // (screen 2 at indices >= 32)
+        uint32_t dirty_tiles[64];
+    #endif
 #endif
 };
 
@@ -5110,9 +5105,6 @@ done_instr:
 
 __core void gb_run_frame(struct gb_s *gb)
 {
-    bool sram_updated_prev = gb->direct.sram_updated;
-    gb->direct.sram_updated = 0;
-    
     gb->gb_frame = 0;
 
     /*
@@ -5128,35 +5120,6 @@ __core void gb_run_frame(struct gb_s *gb)
     while (!gb->gb_frame)
     {
         __gb_step_cpu(gb);
-    }
-    
-    // save SRAM under some conditions
-    // TODO: also save if menu opens, playdate goes to sleep, app closes, or powers down
-    gb->direct.sram_dirty |= gb->direct.sram_updated;
-    ++gb->direct.frames_since_last_save;
-    if (gb->cart_battery && gb->direct.sram_dirty && gb->gb_save_to_disk)
-    {
-        if (gb->direct.frames_since_last_save >= PGB_MAX_FRAMES_SAVE)
-        {
-            playdate->system->logToConsole("Saving (periodic)");
-            gb->gb_save_to_disk(gb);
-            gb->direct.frames_since_last_save = 0;
-            gb->direct.frames_since_sram_update = 0;
-        }
-        else if (!gb->direct.sram_updated)
-        {
-            if (gb->direct.frames_since_sram_update >= PGB_MIN_FRAMES_SAVE)
-            {
-                playdate->system->logToConsole("Saving (gap since last ram edit)");
-                gb->gb_save_to_disk(gb);
-                gb->direct.frames_since_last_save = 0;
-            }
-            gb->direct.frames_since_sram_update = 0;
-        }
-    }
-    else
-    {
-        gb->direct.frames_since_sram_update++;
     }
 }
 
