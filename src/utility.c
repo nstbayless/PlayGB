@@ -227,7 +227,7 @@ PGB_LoadedCoverArt pgb_load_and_scale_cover_art_from_path(
         return result;
     }
 
-    char *error_str = NULL;
+    const char *error_str = NULL;
     LCDBitmap *original_image =
         playdate->graphics->loadBitmap(cover_path, &error_str);
 
@@ -235,7 +235,7 @@ PGB_LoadedCoverArt pgb_load_and_scale_cover_art_from_path(
     {
         playdate->system->logToConsole(
             "Error string from loadBitmap for %s: %s", cover_path, error_str);
-        pgb_free(error_str);
+        pgb_free((void*)error_str);
     }
 
     if (original_image == NULL)
@@ -287,7 +287,7 @@ PGB_LoadedCoverArt pgb_load_and_scale_cover_art_from_path(
                 "Error: Calculated scaled dimensions are zero or negative "
                 "(%dx%d) for %s. Original: %dx%d, Scale: %f",
                 result.scaled_width, result.scaled_height, cover_path,
-                result.original_width, result.original_height, scale);
+                result.original_width, result.original_height, (double)scale);
             playdate->graphics->freeBitmap(original_image);
             result.status = PGB_COVER_ART_INVALID_IMAGE;
             return result;

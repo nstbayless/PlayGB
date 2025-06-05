@@ -53,7 +53,7 @@ void PGB_init(void)
     PGB_present(libraryScene->scene);
 }
 
-__section__(".rare") static void switchToPendingScene()
+__section__(".rare") static void switchToPendingScene(void)
 {
     // present pending scene
 
