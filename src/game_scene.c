@@ -20,7 +20,6 @@
 #include "game_scene.h"
 
 static const float TARGET_TIME_PER_GB_FRAME_MS = 1000.0f / 59.73f;
-static const float PERFORMANCE_SKIP_OVERRIDE_FACTOR = 0.99f;
 static uint8_t MAX_CONSECUTIVE_DRAW_SKIPS = 0;
 static const uint8_t ADJUSTMENT_PERIOD_FRAMES = 60;
 
@@ -827,44 +826,26 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         bool should_draw_this_frame = true;
 
         if (context->frames_to_skip_drawing > 0)
-        {  // A skip strategy is active
-            bool planned_skip_for_this_frame_in_burst =
-                (context->frames_actually_skipped_drawing <
-                     context->frames_to_skip_drawing &&
-                 context->frames_actually_skipped_drawing <
-                     MAX_CONSECUTIVE_DRAW_SKIPS);
-
-            if (planned_skip_for_this_frame_in_burst)
+        {
+            if (context->frames_actually_skipped_drawing <
+                    context->frames_to_skip_drawing &&
+                context->frames_actually_skipped_drawing <
+                    MAX_CONSECUTIVE_DRAW_SKIPS)
             {
-                // A skip is planned. Check if previous frame's performance
-                // allows an override.
-                if (actual_delta_time_ms < (TARGET_TIME_PER_GB_FRAME_MS *
-                                            PERFORMANCE_SKIP_OVERRIDE_FACTOR))
-                {
-                    // Previous frame was fast, override skip and draw this
-                    // frame.
-                    should_draw_this_frame = true;
-                    context->frames_actually_skipped_drawing = 0;
-                }
-                else
-                {
-                    // Previous frame wasn't fast enough, proceed with planned
-                    // skip.
-                    should_draw_this_frame = false;
-                    context->frames_actually_skipped_drawing++;
-                }
+                should_draw_this_frame = false;
+                context->frames_actually_skipped_drawing++;
             }
             else
             {
-                // Max skips for burst reached or planned skips for burst done.
-                should_draw_this_frame = true;
+                // Max skips reached for this burst, or planned skips done.
+                // Force a draw for next opportunity.
                 context->frames_actually_skipped_drawing = 0;
             }
         }
         else
         {
-            should_draw_this_frame = true;
-            context->frames_actually_skipped_drawing = 0;
+            context->frames_actually_skipped_drawing =
+                0;  // No planned skips, so reset counter
         }
 
         // --- 2. Conditional Screen Update (Drawing) Logic ---
