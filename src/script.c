@@ -170,6 +170,7 @@ static int pgb_close(lua_State *L)
     return 0;
 }
 
+__section__(".rare")
 static void register_pgb_library(lua_State *L)
 {
     lua_newtable(L);

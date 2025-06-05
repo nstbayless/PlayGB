@@ -5529,6 +5529,24 @@ void gb_init_lcd(struct gb_s *gb)
 
 #endif
 
+__section__(".rare") static
+u8 __gb_invalid_instruction(struct gb_s *restrict gb,
+    uint8_t opcode)
+{
+    if (opcode == PGB_HW_BREAKPOINT_OPCODE)
+    {
+        int rv = __gb_try_breakpoint(gb);
+        if (rv > 0)
+        {
+            return rv;
+        }
+    }
+
+    (gb->gb_error)(gb, GB_INVALID_OPCODE, opcode);
+    gb->gb_frame = 1;
+    return 1 * 4;  // ?
+}
+
 __shell static u8 __gb_rare_instruction(struct gb_s *restrict gb,
                                         uint8_t opcode)
 {
@@ -5576,18 +5594,6 @@ __shell static u8 __gb_rare_instruction(struct gb_s *restrict gb,
         gb->gb_halt = 1;
     }
         return 1 * 4;
-        #if 0
-    case PGB_HW_BREAKPOINT_OPCODE:
-        {
-            int rv = __gb_try_breakpoint(gb);
-            if (rv <= 0)
-            {
-                goto invalid_opcode;
-            }
-            return rv;
-        }
-        break;
-        #endif
     case 0xE0:
         __gb_write(gb, 0xFF00 | __gb_read(gb, gb->cpu_reg.pc++), gb->cpu_reg.a);
         return 3 * 4;
@@ -5628,10 +5634,7 @@ __shell static u8 __gb_rare_instruction(struct gb_s *restrict gb,
         gb->gb_ime = 1;
         return 1 * 4;
     default:
-    invalid_opcode:
-        (gb->gb_error)(gb, GB_INVALID_OPCODE, opcode);
-        gb->gb_frame = 1;
-        return 1 * 4;  // ?
+        return __gb_invalid_instruction(gb, opcode);
     }
 }
 
