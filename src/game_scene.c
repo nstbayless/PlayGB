@@ -17,7 +17,9 @@
 #include "userstack.h"
 #include "utility.h"
 
+// clang-format off
 #include "game_scene.h"
+// clang-format on
 
 PGB_GameScene *audioGameScene = NULL;
 
@@ -175,7 +177,6 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     context->rom = NULL;
     context->cart_ram = NULL;
 
-
     PDButtons current_pd_buttons;
     playdate->system->getButtonState(&current_pd_buttons, NULL, NULL);
     context->buttons_held_since_start = current_pd_buttons;
@@ -286,15 +287,16 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
         gameScene->error = romError;
     }
 
-    #ifndef NOLUA
+#ifndef NOLUA
     char name[17];
     gb_get_rom_name(context->gb, name);
     gameScene->script = script_begin(name, gameScene);
     if (!gameScene->script)
     {
-        playdate->system->logToConsole("Associated script failed to load or not found.");
+        playdate->system->logToConsole(
+            "Associated script failed to load or not found.");
     }
-    #endif
+#endif
     DTCM_VERIFY();
 
     return gameScene;
@@ -747,9 +749,9 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         // mask out buttons that have been held down since the game started
         context->buttons_held_since_start &= current_pd_buttons;
 
-    #if 0
+#if 0
         current_pd_buttons &= ~context->buttons_held_since_start;
-    #endif
+#endif
 
         bool gb_joypad_start_is_active_low =
             !(gameScene->selector.startPressed);
@@ -780,12 +782,12 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 
         context->gb->direct.sram_updated = 0;
 
-    #ifndef NOLUA
+#ifndef NOLUA
         if (context->scene->script)
         {
             script_tick(context->scene->script);
         }
-    #endif
+#endif
 
 #ifdef DTCM_ALLOC
         DTCM_VERIFY_DEBUG();
@@ -842,11 +844,9 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 
             ITCM_CORE_FN(update_fb_dirty_lines)(
                 playdate->graphics->getFrame(), current_lcd,
-                context->line_has_changed,
-                playdate->graphics->markUpdatedRows);
+                context->line_has_changed, playdate->graphics->markUpdatedRows);
 
-            ITCM_CORE_FN(gb_fast_memcpy_64)(context->previous_lcd,
-                                            current_lcd,
+            ITCM_CORE_FN(gb_fast_memcpy_64)(context->previous_lcd, current_lcd,
                                             LCD_HEIGHT * LCD_WIDTH_PACKED);
         }
 

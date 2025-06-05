@@ -78,7 +78,8 @@ typedef struct PGB_GameSceneContext
                      LCD_WIDTH_PACKED];  // Buffer for the previous frame's LCD
     bool line_has_changed[LCD_HEIGHT];   // Flags for changed lines
 
-    int buttons_held_since_start; // buttons that have been down since the start of the game
+    int buttons_held_since_start;  // buttons that have been down since the
+                                   // start of the game
 } PGB_GameSceneContext;
 
 typedef struct PGB_GameScene
