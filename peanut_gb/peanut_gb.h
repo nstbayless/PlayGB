@@ -844,7 +844,7 @@ __core_section("bgcache") void __gb_update_bgcache_tile(
         0x1000 * (addr_mode && tile < 128) | ((int)tile) * 0x10;
     uint8_t *bgcache = gb->bgcache + addr_mode * (BGCACHE_SIZE / 2);
     uint8_t *vram = &gb->vram[tile_data_addr];
-    for (int tline = 0; tline < 8; tline++)
+    for (int tline = 0; tline < 8; tline ++)
     {
         int y = tline + ty * 8;
         unsigned t1 = vram[2 * tline];
