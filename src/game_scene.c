@@ -19,10 +19,6 @@
 
 #include "game_scene.h"
 
-static const float TARGET_TIME_PER_GB_FRAME_MS = 1000.0f / 59.73f;
-static uint8_t MAX_CONSECUTIVE_DRAW_SKIPS = 0;
-static const uint8_t ADJUSTMENT_PERIOD_FRAMES = 60;
-
 PGB_GameScene *audioGameScene = NULL;
 
 static void PGB_GameScene_selector_init(PGB_GameScene *gameScene);
@@ -183,11 +179,6 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     PDButtons current_pd_buttons;
     playdate->system->getButtonState(&current_pd_buttons, NULL, NULL);
     context->buttons_held_since_start = current_pd_buttons;
-
-    context->frames_to_skip_drawing = 0;
-    context->frames_actually_skipped_drawing = 0;
-    context->frames_emulated_since_adjustment = 0;
-    context->total_time_for_adjustment_period_ms = 0.0f;
 
     gameScene->context = context;
 
@@ -662,13 +653,6 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
     PGB_GameScene *gameScene = object;
     PGB_GameSceneContext *context = gameScene->context;
 
-    float actual_delta_time_ms = PGB_App->dt * 1000.0f;
-    if (gameScene->state == PGB_GameSceneStateLoaded)
-    {  // Only accumulate if game is running
-        context->total_time_for_adjustment_period_ms += actual_delta_time_ms;
-        context->frames_emulated_since_adjustment++;
-    }
-
     PGB_Scene_update(gameScene->scene);
 
     float progress = 0.5f;
@@ -822,108 +806,48 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
             save_check(context->gb);
         }
 
-        // --- 1. Dynamic Frame Skipping Decision ---
-        bool should_draw_this_frame = true;
-
-        if (context->frames_to_skip_drawing > 0)
+        // --- Conditional Screen Update (Drawing) Logic ---
+        uint8_t *current_lcd = context->gb->lcd;
+        bool any_line_changed_this_frame = false;
+        for (int y = 0; y < LCD_HEIGHT; y++)
         {
-            if (context->frames_actually_skipped_drawing <
-                    context->frames_to_skip_drawing &&
-                context->frames_actually_skipped_drawing <
-                    MAX_CONSECUTIVE_DRAW_SKIPS)
+            if (memcmp(&current_lcd[y * LCD_WIDTH_PACKED],
+                       &context->previous_lcd[y * LCD_WIDTH_PACKED],
+                       LCD_WIDTH_PACKED) != 0)
             {
-                should_draw_this_frame = false;
-                context->frames_actually_skipped_drawing++;
+                context->line_has_changed[y] = true;
+                any_line_changed_this_frame = true;
             }
             else
             {
-                // Max skips reached for this burst, or planned skips done.
-                // Force a draw for next opportunity.
-                context->frames_actually_skipped_drawing = 0;
-            }
-        }
-        else
-        {
-            context->frames_actually_skipped_drawing =
-                0;  // No planned skips, so reset counter
-        }
-
-        // --- 2. Conditional Screen Update (Drawing) Logic ---
-        if (should_draw_this_frame)
-        {
-            uint8_t *current_lcd = context->gb->lcd;
-            bool any_line_changed_this_frame = false;
-            for (int y = 0; y < LCD_HEIGHT; y++)
-            {
-                if (memcmp(&current_lcd[y * LCD_WIDTH_PACKED],
-                           &context->previous_lcd[y * LCD_WIDTH_PACKED],
-                           LCD_WIDTH_PACKED) != 0)
-                {
-                    context->line_has_changed[y] = true;
-                    any_line_changed_this_frame = true;
-                }
-                else
-                {
-                    context->line_has_changed[y] = false;
-                }
-            }
-
-            // Determine if drawing is actually needed based on changes or
-            // forced display
-            bool actual_gb_draw_needed =
-                context->gb->lcd_master_enable &&
-                (any_line_changed_this_frame || gbScreenRequiresFullRefresh);
-
-            if (actual_gb_draw_needed)
-            {
-                if (gbScreenRequiresFullRefresh)
-                {
-                    for (int i = 0; i < LCD_HEIGHT; i++)
-                    {
-                        context->line_has_changed[i] = true;
-                    }
-                }
-
-                ITCM_CORE_FN(update_fb_dirty_lines)(
-                    playdate->graphics->getFrame(), current_lcd,
-                    context->line_has_changed,
-                    playdate->graphics->markUpdatedRows);
-
-                ITCM_CORE_FN(gb_fast_memcpy_64)(context->previous_lcd,
-                                                current_lcd,
-                                                LCD_HEIGHT * LCD_WIDTH_PACKED);
+                context->line_has_changed[y] = false;
             }
         }
 
-        // --- 3. Adjust Skip Level Periodically ---
-        if (context->frames_emulated_since_adjustment >=
-            ADJUSTMENT_PERIOD_FRAMES)
+        // Determine if drawing is actually needed based on changes or
+        // forced display
+        bool actual_gb_draw_needed =
+            context->gb->lcd_master_enable &&
+            (any_line_changed_this_frame || gbScreenRequiresFullRefresh);
+
+        if (actual_gb_draw_needed)
         {
-            float average_time_per_emulated_frame_ms =
-                context->total_time_for_adjustment_period_ms /
-                context->frames_emulated_since_adjustment;
-
-            if (average_time_per_emulated_frame_ms >
-                TARGET_TIME_PER_GB_FRAME_MS * 1.1f)
+            if (gbScreenRequiresFullRefresh)
             {
-                if (context->frames_to_skip_drawing <
-                    MAX_CONSECUTIVE_DRAW_SKIPS)
+                for (int i = 0; i < LCD_HEIGHT; i++)
                 {
-                    context->frames_to_skip_drawing++;
-                }
-            }
-            else if (average_time_per_emulated_frame_ms <
-                     TARGET_TIME_PER_GB_FRAME_MS * 0.9f)
-            {
-                if (context->frames_to_skip_drawing > 0)
-                {
-                    context->frames_to_skip_drawing--;
+                    context->line_has_changed[i] = true;
                 }
             }
 
-            // Reset for next adjustment period
-            context->total_time_for_adjustment_period_ms = 0.0f;
-            context->frames_emulated_since_adjustment = 0;
+            ITCM_CORE_FN(update_fb_dirty_lines)(
+                playdate->graphics->getFrame(), current_lcd,
+                context->line_has_changed,
+                playdate->graphics->markUpdatedRows);
+
+            ITCM_CORE_FN(gb_fast_memcpy_64)(context->previous_lcd,
+                                            current_lcd,
+                                            LCD_HEIGHT * LCD_WIDTH_PACKED);
         }
 
         // Always request the update loop to run at 60 FPS.
