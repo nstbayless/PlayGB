@@ -361,7 +361,7 @@ static void PGB_GameScene_selector_init(PGB_GameScene *gameScene)
     gameScene->selector.selectButtonX = selectButtonX;
     gameScene->selector.selectButtonY = selectButtonY;
     gameScene->selector.numberOfFrames = 27;
-    gameScene->selector.triggerAngle = 15;
+    gameScene->selector.triggerAngle = 45;
     gameScene->selector.deadAngle = 20;
     gameScene->selector.index = 0;
     gameScene->selector.startPressed = false;
