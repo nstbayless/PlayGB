@@ -7,6 +7,8 @@
 
 #define PGB_IMPL
 
+#include "game_scene.h"
+
 #include "../minigb_apu/minigb_apu.h"
 #include "../peanut_gb/peanut_gb.h"
 #include "app.h"
@@ -16,8 +18,6 @@
 #include "script.h"
 #include "userstack.h"
 #include "utility.h"
-
-#include "game_scene.h"
 
 static const float TARGET_TIME_PER_GB_FRAME_MS = 1000.0f / 59.73f;
 static const float PERFORMANCE_SKIP_OVERRIDE_FACTOR = 0.99f;
@@ -180,7 +180,6 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     context->rom = NULL;
     context->cart_ram = NULL;
 
-
     PDButtons current_pd_buttons;
     playdate->system->getButtonState(&current_pd_buttons, NULL, NULL);
     context->buttons_held_since_start = current_pd_buttons;
@@ -296,15 +295,16 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
         gameScene->error = romError;
     }
 
-    #ifndef NOLUA
+#ifndef NOLUA
     char name[17];
     gb_get_rom_name(context->gb, name);
     gameScene->script = script_begin(name, gameScene);
     if (!gameScene->script)
     {
-        playdate->system->logToConsole("Associated script failed to load or not found.");
+        playdate->system->logToConsole(
+            "Associated script failed to load or not found.");
     }
-    #endif
+#endif
     DTCM_VERIFY();
 
     return gameScene;
@@ -764,9 +764,9 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         // mask out buttons that have been held down since the game started
         context->buttons_held_since_start &= current_pd_buttons;
 
-    #if 0
+#if 0
         current_pd_buttons &= ~context->buttons_held_since_start;
-    #endif
+#endif
 
         bool gb_joypad_start_is_active_low =
             !(gameScene->selector.startPressed);
@@ -797,12 +797,12 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 
         context->gb->direct.sram_updated = 0;
 
-    #ifndef NOLUA
+#ifndef NOLUA
         if (context->scene->script)
         {
             script_tick(context->scene->script);
         }
-    #endif
+#endif
 
 #ifdef DTCM_ALLOC
         DTCM_VERIFY_DEBUG();

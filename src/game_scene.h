@@ -82,7 +82,8 @@ typedef struct PGB_GameSceneContext
     uint8_t frames_actually_skipped_drawing;
     uint8_t frames_emulated_since_adjustment;
     float total_time_for_adjustment_period_ms;
-    int buttons_held_since_start; // buttons that have been down since the start of the game
+    int buttons_held_since_start;  // buttons that have been down since the
+                                   // start of the game
 } PGB_GameSceneContext;
 
 typedef struct PGB_GameScene
