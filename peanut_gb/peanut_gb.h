@@ -5472,7 +5472,7 @@ int __gb_try_breakpoint(struct gb_s *gb)
         if unlikely(opcode == PGB_HW_BREAKPOINT_OPCODE)
         {
             // this is pretty messed up, but let's handle it gracefully
-            __gb_on_breakpoint(gb, gb->cpu_reg.pc);
+            __gb_on_breakpoint(gb, i);
             return 4;
         }
         else
@@ -5483,7 +5483,7 @@ int __gb_try_breakpoint(struct gb_s *gb)
             uint16_t prev_bank = gb->selected_rom_bank;
             
             // handle breakpoint
-            __gb_on_breakpoint(gb, gb->cpu_reg.pc);
+            __gb_on_breakpoint(gb, i);
             
             int cycles = 0;
             

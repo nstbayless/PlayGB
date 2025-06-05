@@ -298,6 +298,10 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     }
 #endif
     DTCM_VERIFY();
+    
+    PGB_ASSERT(gameScene->context == context);
+    PGB_ASSERT(gameScene->context->scene == gameScene);
+    PGB_ASSERT(gameScene->context->gb->direct.priv == context);
 
     return gameScene;
 }
@@ -788,6 +792,8 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
             script_tick(context->scene->script);
         }
 #endif
+    
+    PGB_ASSERT(context == context->gb->direct.priv);
 
 #ifdef DTCM_ALLOC
         DTCM_VERIFY_DEBUG();
@@ -796,11 +802,14 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 #else
         // copy gb to stack (DTCM) temporarily
         struct gb_s gb;
-        memcpy(&gb, context->gb, sizeof(struct gb_s));
+        struct gb_s* tmp_gb = context->gb;
+        context->gb = &gb;
+        memcpy(&gb, tmp_gb, sizeof(struct gb_s));
 
         gb_run_frame(&gb);
 
-        memcpy(context->gb, &gb, sizeof(struct gb_s));
+        memcpy(tmp_gb, &gb, sizeof(struct gb_s));
+        context->gb = tmp_gb;
 #endif
 
         if (context->gb->cart_battery && context->gb->direct.sram_dirty)
@@ -1398,4 +1407,13 @@ static void PGB_GameScene_free(void *object)
 __section__(".rare")
 void __gb_on_breakpoint(struct gb_s *gb, int breakpoint_number)
 {
+    PGB_GameSceneContext *context = gb->direct.priv;
+    PGB_GameScene *gameScene = context->scene;
+    
+    PGB_ASSERT(gameScene->context == context);
+    PGB_ASSERT(gameScene->context->scene == gameScene);
+    PGB_ASSERT(gameScene->context->gb->direct.priv == context);
+    PGB_ASSERT(gameScene->context->gb == gb);
+    
+    script_on_breakpoint(gameScene->script, breakpoint_number);
 }

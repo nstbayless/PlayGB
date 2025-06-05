@@ -171,6 +171,139 @@ static int pgb_close(lua_State *L)
 }
 
 __section__(".rare")
+static int pgb_regs_index(lua_State *L)
+{
+    struct gb_s *gb = get_gb(L);
+    const char *reg_name = luaL_checkstring(L, 2);
+
+    if (strcmp(reg_name, "af") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.af);
+    }
+    else if (strcmp(reg_name, "a") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.a);
+    }
+    else if (strcmp(reg_name, "f") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.f);
+    }
+    else if (strcmp(reg_name, "bc") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.bc);
+    }
+    else if (strcmp(reg_name, "b") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.b);
+    }
+    else if (strcmp(reg_name, "c") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.c);
+    }
+    else if (strcmp(reg_name, "de") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.de);
+    }
+    else if (strcmp(reg_name, "d") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.d);
+    }
+    else if (strcmp(reg_name, "e") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.e);
+    }
+    else if (strcmp(reg_name, "hl") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.hl);
+    }
+    else if (strcmp(reg_name, "h") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.h);
+    }
+    else if (strcmp(reg_name, "l") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.l);
+    }
+    else if (strcmp(reg_name, "sp") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.sp);
+    }
+    else if (strcmp(reg_name, "pc") == 0)
+    {
+        lua_pushinteger(L, gb->cpu_reg.pc);
+    }
+    else
+    {
+        return luaL_error(L, "pgb.regs: unknown register '%s'", reg_name);
+    }
+    
+    return 1;
+}
+
+__section__(".rare")
+static int pgb_regs_newindex(lua_State *L)
+{
+    struct gb_s *gb = get_gb(L);
+    const char *reg_name = luaL_checkstring(L, 2);
+    int value = luaL_checkinteger(L, 3);
+
+    if (strcmp(reg_name, "af") == 0)
+    {
+        gb->cpu_reg.af = value;
+    }
+    else if (strcmp(reg_name, "a") == 0)
+    {
+        gb->cpu_reg.a = value;
+    }
+    else if (strcmp(reg_name, "f") == 0)
+    {
+        gb->cpu_reg.f = value;
+    }
+    else if (strcmp(reg_name, "bc") == 0)
+    {
+        gb->cpu_reg.bc = value;
+    }
+    else if (strcmp(reg_name, "b") == 0)
+    {
+        gb->cpu_reg.b = value;
+    }
+    else if (strcmp(reg_name, "c") == 0)
+    {
+        gb->cpu_reg.c = value;
+    }
+    else if (strcmp(reg_name, "de") == 0)
+    {
+        gb->cpu_reg.de = value;
+    }
+    else if (strcmp(reg_name, "d") == 0)
+    {
+        gb->cpu_reg.d = value;
+    }
+    else if (strcmp(reg_name, "e") == 0)
+    {
+        gb->cpu_reg.e = value;
+    }
+    else if (strcmp(reg_name, "hl") == 0)
+    {
+        gb->cpu_reg.hl = value;
+    }
+    else if (strcmp(reg_name, "h") == 0)
+    {
+        gb->cpu_reg.h = value;
+    }
+    else if (strcmp(reg_name, "l") == 0)
+    {
+        gb->cpu_reg.l = value;
+    }
+    else
+    {
+        return luaL_error(L, "pgb.regs: unknown register '%s'", reg_name);
+    }
+
+    return 0;
+}
+
+__section__(".rare")
 static void register_pgb_library(lua_State *L)
 {
     lua_newtable(L);
@@ -192,6 +325,19 @@ static void register_pgb_library(lua_State *L)
 
         lua_pushcfunction(L, pgb_setCrankSoundsDisabled);
         lua_setfield(L, -2, "setCrankSoundsDisabled");
+        
+        // pgb.regs
+        lua_newtable(L);
+        {
+            lua_newtable(L);
+            lua_pushcfunction(L, pgb_regs_index);
+            lua_setfield(L, -2, "__index");
+            lua_pushcfunction(L, pgb_regs_newindex);
+            lua_setfield(L, -2, "__newindex");
+            lua_setmetatable(L, -2);
+        }
+        lua_setfield(L, -2, "regs");
+        
     }
     lua_setglobal(L, "pgb");
 }
@@ -424,6 +570,40 @@ void script_tick(lua_State *L)
         fprintf(stderr, "script_tick error: %s\n", err);
         lua_pop(L, 1);
     }
+}
+
+__section__(".rare")
+void script_on_breakpoint(lua_State* L, int index)
+{
+    // get lua top, store so it can be reset to later
+    int top = lua_gettop(L);
+    
+    // Execute function from registry, breakpoint number index
+    lua_getfield(L, LUA_REGISTRYINDEX, "pgb_breakpoints");
+    if (!lua_istable(L, -1))
+    {
+        lua_pop(L, 1);
+        return;
+    }
+    lua_pushinteger(L, index);
+    lua_gettable(L, -2);  // get function at index
+    if (!lua_isfunction(L, -1))
+    {
+        printf("Unknown breakpoint %d\n", index);
+        lua_pop(L, 2);  // pop function and table
+        return;
+    }
+    lua_remove(L, -2);  // remove table, leave function
+    // call function, pass index as argument
+    lua_pushinteger(L, index);
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+    {
+        const char *err = lua_tostring(L, -1);
+        fprintf(stderr, "script breakpoint error error: %s\n", err);
+        lua_pop(L, 1);
+    }
+
+    lua_settop(L, top);
 }
 
 #endif

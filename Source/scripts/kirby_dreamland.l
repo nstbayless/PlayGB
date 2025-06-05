@@ -18,13 +18,16 @@ poke_verify(6, 0x4096, 0xE6, 0xFE)
 poke_verify(6, 0x4097, 0x08, 0x01)
 poke_verify(6, 0x4098, 0x28, 0x20)
 
---[[
 pgb.rom_set_breakpoint(
     (6*0x4000) | (0x4096 % 0x4000),
     function(n)
+        -- can also start the game with 'start'
+        print("reg a: ", pgb.regs.a, " pc: ", pgb.regs.pc)
+        if pgb.regs.a == 0x08 then
+            pgb.regs.a = 1
+        end
     end
 )
-]]
 
 function pgb.update()
     
