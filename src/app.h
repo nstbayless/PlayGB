@@ -38,10 +38,8 @@ typedef struct PGB_Application
     LCDFont *titleFont;
     LCDFont *subheadFont;
     LCDFont *labelFont;
-    LCDBitmap *selectorNeutralBitmap;
-    LCDBitmap *selectorSelectBitmap;
-    LCDBitmap *selectorStartBitmap;
-    LCDBitmap *selectorStartSelectBitmap;
+    LCDBitmapTable *selectorBitmapTable;
+    LCDBitmap *startSelectBitmap;
     SoundSource *soundSource;
 } PGB_Application;
 

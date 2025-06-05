@@ -23,7 +23,6 @@ static const float TARGET_TIME_PER_GB_FRAME_MS = 1000.0f / 59.73f;
 static const float PERFORMANCE_SKIP_OVERRIDE_FACTOR = 0.99f;
 static uint8_t MAX_CONSECUTIVE_DRAW_SKIPS = 0;
 static const uint8_t ADJUSTMENT_PERIOD_FRAMES = 60;
-static const int PULSE_DURATION = 15;
 
 PGB_GameScene *audioGameScene = NULL;
 
@@ -129,9 +128,8 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     gameScene->model =
         (PGB_GameSceneModel){.state = PGB_GameSceneStateError,
                              .error = PGB_GameSceneErrorUndefined,
-                             .empty = true,
-                             .startPressed_for_visuals = false,
-                             .selectPressed_for_visuals = false};
+                             .selectorIndex = 0,
+                             .empty = true};
 
     gameScene->audioEnabled = preferences_sound_enabled;
     gameScene->audioLocked = false;
@@ -181,8 +179,8 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     context->scene = gameScene;
     context->rom = NULL;
     context->cart_ram = NULL;
-    
-    
+
+
     PDButtons current_pd_buttons;
     playdate->system->getButtonState(&current_pd_buttons, NULL, NULL);
     context->buttons_held_since_start = current_pd_buttons;
@@ -362,15 +360,12 @@ static void PGB_GameScene_selector_init(PGB_GameScene *gameScene)
     gameScene->selector.startButtonY = startButtonY;
     gameScene->selector.selectButtonX = selectButtonX;
     gameScene->selector.selectButtonY = selectButtonY;
-    gameScene->selector.triggerAngle = 45;
+    gameScene->selector.numberOfFrames = 27;
+    gameScene->selector.triggerAngle = 15;
     gameScene->selector.deadAngle = 20;
+    gameScene->selector.index = 0;
     gameScene->selector.startPressed = false;
     gameScene->selector.selectPressed = false;
-    gameScene->selector.is_in_start_zone_latch = false;
-    gameScene->selector.is_in_select_zone_latch = false;
-    gameScene->selector.is_in_both_zone_latch = false;
-    gameScene->selector.start_pulse_countdown = 0;
-    gameScene->selector.select_pulse_countdown = 0;
 }
 
 /**
@@ -677,148 +672,68 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 
     PGB_Scene_update(gameScene->scene);
 
-    float angle_for_logic = 0.0f;
+    float progress = 0.5f;
 
-    if (gameScene->selector.start_pulse_countdown > 0)
-    {
-        gameScene->selector.start_pulse_countdown--;
-    }
-    if (gameScene->selector.select_pulse_countdown > 0)
-    {
-        gameScene->selector.select_pulse_countdown--;
-    }
-
-    bool should_trigger_start_pulse_this_frame = false;
-    bool should_trigger_select_pulse_this_frame = false;
+    gameScene->selector.startPressed = false;
+    gameScene->selector.selectPressed = false;
 
     if (!playdate->system->isCrankDocked())
     {
-        float raw_crank_angle = playdate->system->getCrankAngle();
-        angle_for_logic = fmaxf(0.0f, fminf(360.0f, raw_crank_angle));
+        float angle = fmaxf(0, fminf(360, playdate->system->getCrankAngle()));
 
-        bool angle_is_in_start_only_activation_range =
-            (angle_for_logic <= (180.0f - gameScene->selector.deadAngle)) &&
-            (angle_for_logic >= gameScene->selector.triggerAngle);
-        bool angle_is_in_select_only_activation_range =
-            (angle_for_logic >= (180.0f + gameScene->selector.deadAngle)) &&
-            (angle_for_logic <= (360.0f - gameScene->selector.triggerAngle));
-        bool angle_is_in_both_activation_range =
-            (angle_for_logic > (180.0f - gameScene->selector.deadAngle)) &&
-            (angle_for_logic < (180.0f + gameScene->selector.deadAngle));
-
-        if (angle_is_in_start_only_activation_range)
+        if (angle <= (180 - gameScene->selector.deadAngle))
         {
-            if (!gameScene->selector.is_in_start_zone_latch &&
-                !gameScene->selector.is_in_both_zone_latch)
+            if (angle >= gameScene->selector.triggerAngle)
             {
-                should_trigger_start_pulse_this_frame = true;
+                gameScene->selector.startPressed = true;
             }
-            gameScene->selector.is_in_start_zone_latch = true;
-            gameScene->selector.is_in_select_zone_latch = false;
-            gameScene->selector.is_in_both_zone_latch = false;
+
             float adjustedAngle =
-                fminf(angle_for_logic, gameScene->selector.triggerAngle);
+                fminf(angle, gameScene->selector.triggerAngle);
+            progress =
+                0.5f - adjustedAngle / gameScene->selector.triggerAngle * 0.5f;
         }
-        else if (angle_is_in_select_only_activation_range)
+        else if (angle >= (180 + gameScene->selector.deadAngle))
         {
-            if (!gameScene->selector.is_in_select_zone_latch &&
-                !gameScene->selector.is_in_both_zone_latch)
+            if (angle <= (360 - gameScene->selector.triggerAngle))
             {
-                should_trigger_select_pulse_this_frame = true;
+                gameScene->selector.selectPressed = true;
             }
-            gameScene->selector.is_in_select_zone_latch = true;
-            gameScene->selector.is_in_start_zone_latch = false;
-            gameScene->selector.is_in_both_zone_latch = false;
-            float adjustedAngle = fminf(360.0f - angle_for_logic,
-                                        gameScene->selector.triggerAngle);
-        }
-        else if (angle_is_in_both_activation_range)
-        {
-            gameScene->selector.is_in_both_zone_latch = true;
-            gameScene->selector.is_in_start_zone_latch = false;
-            gameScene->selector.is_in_select_zone_latch = false;
+
+            float adjustedAngle =
+                fminf(360 - angle, gameScene->selector.triggerAngle);
+            progress =
+                0.5f + adjustedAngle / gameScene->selector.triggerAngle * 0.5f;
         }
         else
-        {
-            gameScene->selector.is_in_start_zone_latch = false;
-            gameScene->selector.is_in_select_zone_latch = false;
-            gameScene->selector.is_in_both_zone_latch = false;
-        }
-
-        if (should_trigger_start_pulse_this_frame &&
-            gameScene->selector.start_pulse_countdown == 0)
-        {
-            gameScene->selector.start_pulse_countdown = PULSE_DURATION;
-        }
-        if (should_trigger_select_pulse_this_frame &&
-            gameScene->selector.select_pulse_countdown == 0)
-        {
-            gameScene->selector.select_pulse_countdown = PULSE_DURATION;
-        }
-
-        if (gameScene->selector.start_pulse_countdown > 0)
-        {
-            gameScene->selector.startPressed = true;
-        }
-        else
-        {
-            gameScene->selector.startPressed = false;
-        }
-
-        if (gameScene->selector.select_pulse_countdown > 0)
-        {
-            gameScene->selector.selectPressed = true;
-        }
-        else
-        {
-            gameScene->selector.selectPressed = false;
-        }
-
-        if (angle_is_in_both_activation_range)
         {
             gameScene->selector.startPressed = true;
             gameScene->selector.selectPressed = true;
-
-            if (gameScene->selector.is_in_both_zone_latch)
-            {
-                gameScene->selector.start_pulse_countdown = 0;
-                gameScene->selector.select_pulse_countdown = 0;
-            }
         }
     }
-    else
-    {  // Crank is docked
-        gameScene->selector.startPressed = false;
-        gameScene->selector.selectPressed = false;
-        gameScene->selector.is_in_start_zone_latch = false;
-        gameScene->selector.is_in_select_zone_latch = false;
-        gameScene->selector.is_in_both_zone_latch = false;
-        gameScene->selector.start_pulse_countdown = 0;
-        gameScene->selector.select_pulse_countdown = 0;
-        angle_for_logic = 0.0f;
-    }
 
-    LCDBitmap *bitmap_to_draw = NULL;
+    int selectorIndex;
 
     if (gameScene->selector.startPressed && gameScene->selector.selectPressed)
     {
-        bitmap_to_draw = PGB_App->selectorStartSelectBitmap;
-    }
-    else if (gameScene->selector.startPressed)
-    {
-        bitmap_to_draw = PGB_App->selectorStartBitmap;
-    }
-    else if (gameScene->selector.selectPressed)
-    {
-        bitmap_to_draw = PGB_App->selectorSelectBitmap;
+        selectorIndex = -1;
     }
     else
-    {  // Neither Start nor Select is pressed
-        bitmap_to_draw = PGB_App->selectorNeutralBitmap;
+    {
+        selectorIndex =
+            1 + roundf(progress * (gameScene->selector.numberOfFrames - 2));
+
+        if (progress == 0)
+        {
+            selectorIndex = 0;
+        }
+        else if (progress == 1)
+        {
+            selectorIndex = gameScene->selector.numberOfFrames - 1;
+        }
     }
 
-    bool old_start_pressed = gameScene->model.startPressed_for_visuals;
-    bool old_select_pressed = gameScene->model.selectPressed_for_visuals;
+    gameScene->selector.index = selectorIndex;
 
     bool gbScreenRequiresFullRefresh = false;
     if (gameScene->model.empty || gameScene->model.state != gameScene->state ||
@@ -829,8 +744,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 
     bool animatedSelectorBitmapNeedsRedraw = false;
     if (gbScreenRequiresFullRefresh || !gameScene->staticSelectorUIDrawn ||
-        old_start_pressed != gameScene->selector.startPressed ||
-        old_select_pressed != gameScene->selector.selectPressed)
+        gameScene->model.selectorIndex != gameScene->selector.index)
     {
         animatedSelectorBitmapNeedsRedraw = true;
     }
@@ -838,23 +752,18 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
     gameScene->model.empty = false;
     gameScene->model.state = gameScene->state;
     gameScene->model.error = gameScene->error;
-    gameScene->model.startPressed_for_visuals =
-        gameScene->selector.startPressed;
-    gameScene->model.selectPressed_for_visuals =
-        gameScene->selector.selectPressed;
+    gameScene->model.selectorIndex = gameScene->selector.index;
 
     if (gameScene->state == PGB_GameSceneStateLoaded)
     {
         PGB_GameSceneContext *context = gameScene->context;
-        unsigned int time_for_joypad_log =
-            playdate->system->getCurrentTimeMilliseconds();
 
         PDButtons current_pd_buttons;
         playdate->system->getButtonState(&current_pd_buttons, NULL, NULL);
-        
+
         // mask out buttons that have been held down since the game started
         context->buttons_held_since_start &= current_pd_buttons;
-        
+
     #if 0
         current_pd_buttons &= ~context->buttons_held_since_start;
     #endif
@@ -878,7 +787,6 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
             !(current_pd_buttons & kButtonDown);
 
         if (gbScreenRequiresFullRefresh)
-
         {
             playdate->graphics->clear(kColorBlack);
         }
@@ -1202,12 +1110,21 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 
         if (animatedSelectorBitmapNeedsRedraw)
         {
-            if (bitmap_to_draw != NULL)
-            {  // Check if a bitmap was actually selected
-                playdate->graphics->drawBitmap(
-                    bitmap_to_draw, gameScene->selector.x,
-                    gameScene->selector.y, kBitmapUnflipped);
+            LCDBitmap *bitmap;
+            // Use gameScene->selector.index, which is the most current
+            // calculated frame
+            if (gameScene->selector.index < 0)
+            {
+                bitmap = PGB_App->startSelectBitmap;
             }
+            else
+            {
+                bitmap = playdate->graphics->getTableBitmap(
+                    PGB_App->selectorBitmapTable, gameScene->selector.index);
+            }
+            playdate->graphics->drawBitmap(bitmap, gameScene->selector.x,
+                                           gameScene->selector.y,
+                                           kBitmapUnflipped);
         }
 
         if (!gameScene->staticSelectorUIDrawn || gbScreenRequiresFullRefresh)
