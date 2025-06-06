@@ -1416,5 +1416,5 @@ void __gb_on_breakpoint(struct gb_s *gb, int breakpoint_number)
     PGB_ASSERT(gameScene->context->gb->direct.priv == context);
     PGB_ASSERT(gameScene->context->gb == gb);
     
-    call_with_user_stack_2(script_on_breakpoint, gameScene->script, (void*)(uintptr_t)breakpoint_number);
+    call_with_user_stack_2(script_on_breakpoint, gameScene->script, breakpoint_number);
 }

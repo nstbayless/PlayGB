@@ -180,6 +180,13 @@ static int pgb_ram_poke(lua_State *L)
     return 0;
 }
 
+static int pgb_get_gb_buttons(lua_State *L)
+{
+    struct gb_s* gb = get_gb(L);
+    lua_pushinteger(L, gb->direct.joypad ^ 0xFF);
+    return 1;
+}
+
 static int pgb_get_crank(lua_State *L)
 {
     if (playdate->system->isCrankDocked())
@@ -198,6 +205,15 @@ static int pgb_setCrankSoundsDisabled(lua_State *L)
     // get boolean value
     int disabled = lua_toboolean(L, 1);
     playdate->system->setCrankSoundsDisabled(disabled);
+    return 0;
+}
+
+void __gb_step_cpu(struct gb_s *gb);
+static int pgb_step_cpu(lua_State *L)
+{
+    // UNTESTED
+    struct gb_s* gb = get_gb(L);
+    __gb_step_cpu(gb);
     return 0;
 }
 
@@ -371,11 +387,17 @@ static void register_pgb_library(lua_State *L)
         lua_pushcfunction(L, pgb_ram_peek);
         lua_setfield(L, -2, "ram_peek");
         
+        lua_pushcfunction(L, pgb_get_gb_buttons);
+        lua_setfield(L, -2, "get_gb_buttons");
+        
         lua_pushcfunction(L, pgb_get_crank);
         lua_setfield(L, -2, "get_crank");
 
         lua_pushcfunction(L, pgb_setCrankSoundsDisabled);
         lua_setfield(L, -2, "setCrankSoundsDisabled");
+        
+        lua_pushcfunction(L, pgb_step_cpu);
+        lua_setfield(L, -2, "step_cpu");
         
         // pgb.regs
         lua_newtable(L);
@@ -608,6 +630,8 @@ void script_tick(lua_State *L)
 __section__(".rare")
 void script_on_breakpoint(lua_State* L, int index)
 {
+    if (!L) return;
+    
     // get lua top, store so it can be reset to later
     int top = lua_gettop(L);
     
