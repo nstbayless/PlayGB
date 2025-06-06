@@ -108,4 +108,17 @@ void pgb_free_loaded_cover_art_bitmap(PGB_LoadedCoverArt *art_result);
 #define PGB_ASSERT(x)
 #endif
 
+// compute the next highest power of 2 of 32-bit v
+// https://stackoverflow.com/a/466242
+static inline unsigned next_pow2(unsigned v)
+{
+    --v;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    return ++v;
+}
+
 #endif /* utility_h */

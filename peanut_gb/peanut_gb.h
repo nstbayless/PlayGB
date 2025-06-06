@@ -950,7 +950,11 @@ __core_section("bgdefer") void __gb_process_deferred_tile_update(
 
     gb->dirty_tile_rows = 0;
 }
-#endif
+
+__shell uint8_t __gb_read_full(struct gb_s *gb, const uint_fast16_t addr);
+__shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr, const uint8_t val);
+
+#endif /* PGB_IMPL */
 
 void __gb_write_vram(struct gb_s *gb, uint_fast16_t addr, const uint8_t val)
 {

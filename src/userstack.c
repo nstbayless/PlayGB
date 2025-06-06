@@ -49,15 +49,10 @@ __attribute__((naked)) __section__(".rare") void *call_with_user_stack_impl(
             
             // save original sp and return address
             "push {lr}\n"
-                "push {r0}\n"
-                    "push {r1}\n"
-                        "bl validate_user_stack\n"
-                    "pop {r1}\n"
-                    
-                    // shift arguments down
-                    "mov r0, r1\n"
-                    "mov r1, r2\n"
-                "pop {r3}\n" // pop fn
+                "mov r3, r0\n"
+                // shift arguments down
+                "mov r0, r1\n"
+                "mov r1, r2\n"
                 "blx r3\n"   // call fn(arg)
                 
                 "push {r0}\n"

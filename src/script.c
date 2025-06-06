@@ -13,11 +13,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../peanut_gb/peanut_gb.h"
 #include "app.h"
 #include "dtcm.h"
 #include "game_scene.h"
 #include "script.h"
+#include "jparse.h"
+#include "../peanut_gb/peanut_gb.h"
 
 #ifndef NOLUA
 
@@ -133,6 +134,50 @@ static int pgb_rom_peek(lua_State *L)
 
     lua_pushinteger(L, gb->gb_rom[addr]);
     return 1;
+}
+
+uint8_t __gb_read_full(struct gb_s *gb, const uint_fast16_t addr);
+void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr, uint8_t);
+
+static int pgb_ram_peek(lua_State *L)
+{
+    if (!lua_check_args(L, 1, 1))
+    {
+        return luaL_error(L, "pgb.ram_peek(addr) takes one argument");
+    }
+    
+    struct gb_s* gb = get_gb(L);
+    
+    int addr = luaL_checkinteger(L, 1);
+    
+    if (addr < 0 || addr >= 0x10000)
+    {
+        return luaL_error(L, "pgb.ram_peek: addr out of range (0-FFFF)");
+    }
+    
+    lua_pushinteger(L, __gb_read_full(gb, addr));
+    return 1;
+}
+
+static int pgb_ram_poke(lua_State *L)
+{
+    if (!lua_check_args(L, 2, 2))
+    {
+        return luaL_error(L, "pgb.ram_poke(addr, value) takes two arguments");
+    }
+    
+    struct gb_s* gb = get_gb(L);
+    
+    int addr = luaL_checkinteger(L, 1);
+    int val = luaL_checkinteger(L, 2);
+    
+    if (addr < 0 || addr >= 0x10000)
+    {
+        return luaL_error(L, "pgb.ram_peek: addr out of range (0-FFFF)");
+    }
+    
+    __gb_write_full(gb, addr, val);
+    return 0;
 }
 
 static int pgb_get_crank(lua_State *L)
@@ -320,6 +365,12 @@ static void register_pgb_library(lua_State *L)
         lua_pushcfunction(L, pgb_rom_set_breakpoint);
         lua_setfield(L, -2, "rom_set_breakpoint");
         
+        lua_pushcfunction(L, pgb_ram_poke);
+        lua_setfield(L, -2, "ram_poke");
+        
+        lua_pushcfunction(L, pgb_ram_peek);
+        lua_setfield(L, -2, "ram_peek");
+        
         lua_pushcfunction(L, pgb_get_crank);
         lua_setfield(L, -2, "get_crank");
 
@@ -398,75 +449,84 @@ static void set_package_path_l(lua_State *L)
     free(new_path);
 }
 
-typedef struct
+typedef struct ScriptInfo
 {
-    const char *match_name;
-    const char *matched_script;
-} MatchContext;
+    char* script_path;
+} ScriptInfo;
 
-static void decodeError(struct json_decoder *decoder, const char *error,
-                        int linenum)
+__section__(".rare")
+void script_info_free(ScriptInfo* info)
 {
-    // Log or ignore
+    if (!info) return;
+    if (info->script_path) free(info->script_path);
+    free(info);
 }
 
-static int shouldDecodeArrayValueAtIndex(struct json_decoder *decoder, int pos)
+__section__(".rare")
+ScriptInfo* get_script_info(const char *game_name)
 {
-    return 1;
-}
-
-static void willDecodeSublist(struct json_decoder *decoder, const char *name,
-                              json_value_type type)
-{
-    // No-op for now
-}
-
-static int shouldDecodeTableValueForKey(struct json_decoder *decoder,
-                                        const char *key)
-{
-    return 1;
-}
-
-static void didDecodeTableValue(struct json_decoder *decoder, const char *key,
-                                json_value value)
-{
-    MatchContext *ctx = decoder->userdata;
-
-    if (strcmp(key, "name") == 0 && value.type == kJSONString)
+    json_value v;
+    int ok = parse_json("scripts.json", &v);
+    
+    if (!ok)
     {
-        if (strcmp(ctx->match_name, value.data.stringval) == 0)
+        free_json_data(v);
+        return NULL;
+    }
+    
+    // confirm that top-level value is an array
+    JsonArray* array = v.data.arrayval;
+    if (v.type != kJSONArray || array->n == 0)
+    {
+        free_json_data(v);
+        return NULL;
+    }
+    
+    for (size_t i = 0; i < array->n; i++)
+    {
+        json_value item = array->data[i];
+        if (item.type != kJSONTable)
+            continue;
+        
+        const char *name = NULL;
+        const char *script_path = NULL;
+        
+        JsonObject* obj = item.data.tableval;
+        for (size_t j = 0; j < obj->n; j++)
         {
-            // mark match: nothing to do yet
+            const char *key = obj->data[j].key;
+            json_value value = obj->data[j].value;
+            
+            if (strcmp(key, "name") == 0 && value.type == kJSONString)
+            {
+                name = value.data.stringval;
+            }
+            else if (strcmp(key, "script") == 0 && value.type == kJSONString)
+            {
+            #ifdef TARGET_SIMULATOR
+                char fullpath[1024];
+                snprintf(fullpath, sizeof(fullpath), "Source/%s", value.data.stringval);
+                script_path = strdup(fullpath);
+            #else
+                script_path = value.data.stringval;
+            #endif
+            }
+        }
+        
+        if (name && script_path && strcmp(name, game_name) == 0)
+        {
+            ScriptInfo* info = malloc(sizeof(ScriptInfo));
+            info->script_path = strdup(script_path);
+            free_json_data(v);
+            return info;
         }
     }
-    else if (strcmp(key, "script") == 0 && value.type == kJSONString)
-    {
-        if (ctx->matched_script == NULL)
-        {
-#ifdef TARGET_PLAYDATE
-            ctx->matched_script = strdup(value.data.stringval);
-#else
-            // prepend Source/
-            char fullpath[1024];
-            snprintf(fullpath, sizeof(fullpath), "Source/%s",
-                     value.data.stringval);
-            ctx->matched_script = strdup(fullpath);
-#endif
-        }
-    }
-}
-
-static void didDecodeArrayValue(struct json_decoder *decoder, int pos,
-                                json_value value)
-{
-}
-
-static void *didDecodeSublist(struct json_decoder *decoder, const char *name,
-                              json_value_type type)
-{
+    
+    free_json_data(v);
     return NULL;
 }
 
+// TODO: should take rom data instead
 lua_State *script_begin(const char *game_name, struct PGB_GameScene *game_scene)
 {
     DTCM_VERIFY();
@@ -474,36 +534,10 @@ lua_State *script_begin(const char *game_name, struct PGB_GameScene *game_scene)
     lua_State *L = NULL;
 
     DTCM_VERIFY();
+    
+    ScriptInfo* info = get_script_info(game_name);
 
-    SDFile *file = playdate->file->open("scripts.json", kFileRead);
-    if (!file)
-    {
-        DTCM_VERIFY();
-        return NULL;
-    };
-
-    MatchContext ctx = {.match_name = game_name, .matched_script = NULL};
-
-    struct json_decoder decoder = {
-        .decodeError = decodeError,
-        .willDecodeSublist = willDecodeSublist,
-        .shouldDecodeTableValueForKey = shouldDecodeTableValueForKey,
-        .didDecodeTableValue = didDecodeTableValue,
-        .shouldDecodeArrayValueAtIndex = shouldDecodeArrayValueAtIndex,
-        .didDecodeArrayValue = didDecodeArrayValue,
-        .didDecodeSublist = didDecodeSublist,
-        .userdata = &ctx,
-        .returnString = 0,
-        .path = NULL};
-
-    json_reader reader = {
-        .read = (int (*)(void *, uint8_t *, int))playdate->file->read,
-        .userdata = file};
-
-    int ok = playdate->json->decode(&decoder, reader, NULL);
-    playdate->file->close(file);
-
-    if (!ok || ctx.matched_script == NULL)
+    if (!info)
     {
         return NULL;
     }
@@ -519,19 +553,18 @@ lua_State *script_begin(const char *game_name, struct PGB_GameScene *game_scene)
 
     DTCM_VERIFY();
 
-    if (luaL_dofile(L, ctx.matched_script) != LUA_OK)
+    if (luaL_dofile(L, info->script_path) != LUA_OK)
     {
         const char *err = lua_tostring(L, -1);
         fprintf(stderr, "Lua error: %s\n", err);
         lua_close(L);
-        free((void *)ctx.matched_script);
 
         DTCM_VERIFY();
+        script_info_free(info);
         return NULL;
     }
 
-    free((void *)ctx.matched_script);
-
+    script_info_free(info);
     DTCM_VERIFY();
     return L;
 }

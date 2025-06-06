@@ -290,6 +290,7 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 #ifndef NOLUA
     char name[17];
     gb_get_rom_name(context->gb, name);
+    playdate->system->logToConsole("ROM name: \"%s\"", name);
     gameScene->script = script_begin(name, gameScene);
     if (!gameScene->script)
     {
@@ -1415,5 +1416,5 @@ void __gb_on_breakpoint(struct gb_s *gb, int breakpoint_number)
     PGB_ASSERT(gameScene->context->gb->direct.priv == context);
     PGB_ASSERT(gameScene->context->gb == gb);
     
-    script_on_breakpoint(gameScene->script, breakpoint_number);
+    call_with_user_stack_2(script_on_breakpoint, gameScene->script, breakpoint_number);
 }

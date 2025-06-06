@@ -18,6 +18,7 @@ VPATH += minigb_apu
 
 # List C source files here
 SRC += src/userstack.c
+SRC += src/jparse.c
 SRC += src/script.c
 SRC += src/dtcm.c
 SRC += src/revcheck.c
