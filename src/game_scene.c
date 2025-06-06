@@ -813,7 +813,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         context->gb = tmp_gb;
 #endif
 
-        if (context->gb->cart_battery && context->gb->direct.sram_dirty)
+        if (context->gb->cart_battery)
         {
             save_check(context->gb);
         }
@@ -1159,8 +1159,8 @@ __section__(".text.tick") __space static void save_check(struct gb_s *gb)
     // save SRAM under some conditions
     // TODO: also save if menu opens, playdate goes to sleep, app closes, or
     // powers down
-    gb->direct.sram_dirty |= gb->direct.sram_updated;
     ++frames_since_last_save;
+    gb->direct.sram_dirty |= gb->direct.sram_updated;
     if (gb->cart_battery && gb->direct.sram_dirty)
     {
         if (frames_since_last_save >= PGB_MAX_FRAMES_SAVE)
@@ -1416,5 +1416,5 @@ void __gb_on_breakpoint(struct gb_s *gb, int breakpoint_number)
     PGB_ASSERT(gameScene->context->gb->direct.priv == context);
     PGB_ASSERT(gameScene->context->gb == gb);
     
-    call_with_user_stack_2(script_on_breakpoint, gameScene->script, breakpoint_number);
+    call_with_user_stack_2(script_on_breakpoint, gameScene->script, (void*)(uintptr_t)breakpoint_number);
 }
