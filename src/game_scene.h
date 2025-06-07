@@ -91,6 +91,7 @@ typedef struct PGB_GameScene
     bool audioLocked;
     bool cartridge_has_rtc;
     bool staticSelectorUIDrawn;
+    bool save_data_loaded_successfully;
 
     unsigned int rtc_time;
     uint16_t rtc_seconds_to_catch_up;

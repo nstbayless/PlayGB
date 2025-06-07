@@ -147,6 +147,8 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 
     gameScene->staticSelectorUIDrawn = false;
 
+    gameScene->save_data_loaded_successfully = false;
+
     PGB_GameScene_generateBitmask();
 
     PGB_GameScene_selector_init(gameScene);
@@ -217,6 +219,8 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 
             read_cart_ram_file(save_filename, &context->cart_ram,
                                gb_get_save_size(context->gb));
+
+            gameScene->save_data_loaded_successfully = true;
 
             context->gb->gb_cart_ram = context->cart_ram;
             context->gb->gb_cart_ram_size = gb_get_save_size(context->gb);
@@ -548,11 +552,14 @@ static void gb_error(struct gb_s *gb, const enum gb_error_e gb_err,
     if (is_fatal)
     {
         // save a recovery file
-        char *recovery_filename =
-            pgb_save_filename(context->scene->rom_filename, true);
-        write_cart_ram_file(recovery_filename, context->gb->gb_cart_ram,
-                            gb_get_save_size(context->gb));
-        pgb_free(recovery_filename);
+        if (context->scene->save_data_loaded_successfully)
+        {
+            char *recovery_filename =
+                pgb_save_filename(context->scene->rom_filename, true);
+            write_cart_ram_file(recovery_filename, context->gb->gb_cart_ram,
+                                gb_get_save_size(context->gb));
+            pgb_free(recovery_filename);
+        }
 
         // TODO: write recovery savestate
 
@@ -1302,7 +1309,8 @@ __section__(".rare") static void PGB_GameScene_event(void *object,
         }
         break;
     case kEventLowPower:
-        if (context->gb->direct.sram_dirty)
+        if (context->gb->direct.sram_dirty &&
+            gameScene->save_data_loaded_successfully)
         {
             // save a recovery file
             char *recovery_filename =
