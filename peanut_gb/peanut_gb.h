@@ -1331,17 +1331,17 @@ __core_section("short") static void __gb_write(struct gb_s *gb,
 }
 
 __core_section("util") clalign
-    void gb_fast_memcpy_64(void *restrict _dst, const void *restrict _src,
+    void gb_fast_memcpy_32(void *restrict _dst, const void *restrict _src,
                            size_t len)
 {
-    PGB_ASSERT(len % 8 == 0);
+    PGB_ASSERT(len % 4 == 0);
     PGB_ASSERT(len > 0);
-    uint64_t *dst = _dst;
-    const uint64_t *src = _src;
+    uint32_t *dst = _dst;
+    const uint32_t *src = _src;
     do
     {
         dst[0] = src[0];
-        len -= 8;
+        len -= 4;
         dst++;
         src++;
     } while (len > 0);

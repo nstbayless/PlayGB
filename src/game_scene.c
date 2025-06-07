@@ -21,6 +21,20 @@
 #include "game_scene.h"
 // clang-format on
 
+// attempt to stay on top of frames per second 
+#define DYNAMIC_RATE_ADJUSTMENT 1
+
+// TODO: double-check these
+
+// approximately how long it takes to render one gameboy line
+#define LINE_RENDER_TIME_S 0.000032f
+
+// expected extra time outside of logic + rendering
+#define LINE_RENDER_MARGIN_S 0.0005f
+
+// let's try to render a frame at least this fast
+#define TARGET_RENDER_TIME_S 0.0167f
+
 PGB_GameScene *audioGameScene = NULL;
 
 static void PGB_GameScene_selector_init(PGB_GameScene *gameScene);
@@ -94,7 +108,7 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 {
     playdate->system->logToConsole("ROM: %s", rom_filename);
     playdate->system->setCrankSoundsDisabled(true);
-
+    
     if (!DTCM_VERIFY_DEBUG())
         return NULL;
 
@@ -260,12 +274,6 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
             // Initialize previous_lcd, for simplicity, let's zero it.
             // This means the first frame will draw everything.
             memset(context->previous_lcd, 0, sizeof(context->previous_lcd));
-
-            // Mark all lines as changed for the first frame render
-            for (int i = 0; i < LCD_HEIGHT; i++)
-            {
-                context->line_has_changed[i] = true;
-            }
 
             context->gb->direct.frame_skip = preferences_frame_skip ? 1 : 0;
 
@@ -561,7 +569,7 @@ typedef typeof(playdate->graphics->markUpdatedRows) markUpdateRows_t;
 
 __core_section("fb") void update_fb_dirty_lines(
     uint8_t *restrict framebuffer, uint8_t *restrict lcd,
-    const bool *restrict line_changed_flags, markUpdateRows_t markUpdateRows)
+    const uint16_t *restrict line_changed_flags, markUpdateRows_t markUpdateRows)
 {
     framebuffer += (PGB_LCD_X / 8);
     // const u32 dither = 0b00011111 | (0b00001011 << 8);
@@ -573,7 +581,7 @@ __core_section("fb") void update_fb_dirty_lines(
         PGB_dither_lut_c0 | ((uint32_t)PGB_dither_lut_c1 << 16);
 
     for (int y_gb = LCD_HEIGHT;
-         y_gb-- > 0;)  // y_gb is Game Boy line index from top, 143 down to 0
+         y_gb --> 0;)  // y_gb is Game Boy line index from top, 143 down to 0
     {
         int row_height_on_playdate = 2;
         if (scale_index++ == 2)
@@ -591,7 +599,7 @@ __core_section("fb") void update_fb_dirty_lines(
         unsigned int current_line_pd_top_y =
             fb_y_playdate_current_bottom - row_height_on_playdate;
 
-        if (!line_changed_flags[y_gb])
+        if (((line_changed_flags[y_gb / 16] >> (y_gb % 16)) & 1) == 0)
         {
             // If line not changed, just update the bottom for the next line
             fb_y_playdate_current_bottom -= row_height_on_playdate;
@@ -817,47 +825,104 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         {
             save_check(context->gb);
         }
-
+        
+        #if DYNAMIC_RATE_ADJUSTMENT
+        float logic_time = playdate->system->getElapsedTime();
+        #endif
+        
         // --- Conditional Screen Update (Drawing) Logic ---
         uint8_t *current_lcd = context->gb->lcd;
-        bool any_line_changed_this_frame = false;
-        for (int y = 0; y < LCD_HEIGHT; y++)
+        int line_changed_count = 0;
+        uint16_t line_has_changed[LCD_HEIGHT/16];
+        for (int y = 0; y < LCD_HEIGHT/16; y++)
         {
-            if (memcmp(&current_lcd[y * LCD_WIDTH_PACKED],
-                       &context->previous_lcd[y * LCD_WIDTH_PACKED],
-                       LCD_WIDTH_PACKED) != 0)
+            uint16_t changed = 0;
+            for (int y2 = 0; y2 < 16; ++y2)
             {
-                context->line_has_changed[y] = true;
-                any_line_changed_this_frame = true;
+                changed >>= 1;
+                uint8_t sy = (y*16) | y2;
+                if (memcmp(&current_lcd[sy * LCD_WIDTH_PACKED],
+                        &context->previous_lcd[sy * LCD_WIDTH_PACKED],
+                        LCD_WIDTH_PACKED) != 0)
+                {
+                    changed |= 0x8000;
+                }
+            }
+            
+            line_has_changed[y] = changed;
+        }
+        
+        #if DYNAMIC_RATE_ADJUSTMENT
+        uint16_t interlace_mask = 0xFFFF;
+        static int interlace_i = 0;
+        float time_for_rendering = TARGET_RENDER_TIME_S - LINE_RENDER_MARGIN_S - logic_time;
+        static int frame_i = 0;
+        if (++frame_i % 256 == 16)
+        {
+            printf("logic: %f, time for rendering: %f; %f\n", 1000*(double)logic_time, 1000 * (double)time_for_rendering, 1000 * (double)(line_changed_count * LINE_RENDER_TIME_S));
+        }
+        if (time_for_rendering < line_changed_count * LINE_RENDER_TIME_S)
+        {
+            ++interlace_i;
+            
+            if (time_for_rendering >= line_changed_count * LINE_RENDER_TIME_S * 0.75f)
+            {
+                // render 3 out of 4 lines
+                interlace_mask = 0b11101110111011101110 >> (interlace_i % 4);
             }
             else
             {
-                context->line_has_changed[y] = false;
+                // render 1 out of 2 lines
+                interlace_mask = (interlace_i % 2)
+                ? 0b1010101010101010
+                : 0b0101010101010101;
             }
         }
+        
+        static volatile int k = 0;
+        if (k == 1)
+            interlace_mask = 0xFFFF;
+        #endif
 
         // Determine if drawing is actually needed based on changes or
         // forced display
-        bool actual_gb_draw_needed =
-            context->gb->lcd_master_enable &&
-            (any_line_changed_this_frame || gbScreenRequiresFullRefresh);
+        bool actual_gb_draw_needed = true;
+            //context->gb->lcd_master_enable || gbScreenRequiresFullRefresh;
 
         if (actual_gb_draw_needed)
         {
             if (gbScreenRequiresFullRefresh)
             {
-                for (int i = 0; i < LCD_HEIGHT; i++)
+                for (int i = 0; i < LCD_HEIGHT/16; i++)
                 {
-                    context->line_has_changed[i] = true;
+                    line_has_changed[i] = 0xFFFF;
                 }
             }
+            #if DYNAMIC_RATE_ADJUSTMENT
+            else
+            {
+                for (int i = 0; i < LCD_HEIGHT/16; i++)
+                {
+                    line_has_changed[i] &= interlace_mask;
+                }
+            }
+            #endif
 
             ITCM_CORE_FN(update_fb_dirty_lines)(
                 playdate->graphics->getFrame(), current_lcd,
-                context->line_has_changed, playdate->graphics->markUpdatedRows);
+                line_has_changed, playdate->graphics->markUpdatedRows);
 
-            ITCM_CORE_FN(gb_fast_memcpy_64)(context->previous_lcd, current_lcd,
-                                            LCD_HEIGHT * LCD_WIDTH_PACKED);
+            for (int i = 0; i < LCD_HEIGHT; i++)
+            {
+                if ((line_has_changed[i/16] >> (i%16)) & 1)
+                {
+                    ITCM_CORE_FN(gb_fast_memcpy_32)(
+                        context->previous_lcd + LCD_WIDTH_PACKED*i,
+                        current_lcd + LCD_WIDTH_PACKED*i,
+                        LCD_WIDTH_PACKED
+                    );
+                }
+            }
         }
 
         // Always request the update loop to run at 60 FPS.
@@ -865,108 +930,6 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         gameScene->scene->preferredRefreshRate = 60;
         gameScene->scene->refreshRateCompensation =
             (1.0f / 60.0f - PGB_App->dt);
-
-#if 0
-            uint8_t *framebuffer = ;
-
-            int skip_counter = 0;
-            bool single_line = false;
-
-            int y2 = 0;
-            int lcd_rows = PGB_LCD_Y * LCD_ROWSIZE + PGB_LCD_X / 8;
-
-            int row_offset = LCD_ROWSIZE;
-            int row_offset2 = LCD_ROWSIZE * 2;
-
-            int y_offset;
-            int next_y_offset = 2;
-
-            for(int y = 0; y < (LCD_HEIGHT - 1); y++)
-            {
-                y_offset = next_y_offset;
-
-                if(skip_counter == 5)
-                {
-                    y_offset = 1;
-                    next_y_offset = 1;
-                    skip_counter = 0;
-                    single_line = true;
-                }
-                else if(single_line)
-                {
-                    next_y_offset = 2;
-                    single_line = false;
-                }
-
-                uint8_t *pixels;
-                uint8_t *old_pixels;
-
-                if(context->gb->display.back_fb_enabled)
-                {
-                    pixels = gb_front_fb[y];
-                    old_pixels = gb_back_fb[y];
-                }
-                else
-                {
-                    pixels = gb_back_fb[y];
-                    old_pixels = gb_front_fb[y];
-                }
-
-                if(memcmp(pixels, old_pixels, LCD_WIDTH) != 0)
-                {
-                    int d_row1 = y2 & 3;
-                    int d_row2 = (y2 + 1) & 3;
-
-                    int fb_index1 = lcd_rows;
-                    int fb_index2 = lcd_rows + row_offset;
-
-                    memset(&framebuffer[fb_index1], 0x00, PGB_LCD_ROWSIZE);
-                    if(y_offset == 2)
-                    {
-                        memset(&framebuffer[fb_index2], 0x00, PGB_LCD_ROWSIZE);
-                    }
-
-                    uint8_t bit = 0;
-
-                    for(int x = 0; x < LCD_WIDTH; x++)
-                    {
-                        uint8_t pixel = __gb_get_pixel(pixels, x) & 3;
-
-                        framebuffer[fb_index1] |= PGB_bitmask[pixel][bit][d_row1];
-                        if(y_offset == 2)
-                        {
-                            framebuffer[fb_index2] |= PGB_bitmask[pixel][bit][d_row2];
-                        }
-
-                        bit++;
-
-                        if(bit == 4)
-                        {
-                            bit = 0;
-                            fb_index1++;
-                            fb_index2++;
-                        }
-                    }
-
-                    playdate->graphics->markUpdatedRows(y2, y2 + y_offset - 1);
-
-#if PGB_DEBUG && PGB_DEBUG_UPDATED_ROWS
-                    for(int i = 0; i < y_offset; i++){
-                        context->scene->debug_updatedRows[y2 + i] = true;
-                    }
-#endif
-                }
-
-                y2 += y_offset;
-                lcd_rows += (y_offset == 1) ? row_offset : row_offset2;
-
-                if(!single_line)
-                {
-                    skip_counter++;
-                }
-            }
-        }
-#endif
 
         if (gameScene->cartridge_has_rtc)
         {

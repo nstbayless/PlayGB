@@ -1,3 +1,7 @@
+if true then
+    return
+end
+
 local function poke_verify(bank, addr, prev, val)
     addr = bank*0x4000 | (addr % 0x4000)
     if pgb.rom_peek(addr) ~= prev then
