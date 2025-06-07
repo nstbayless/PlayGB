@@ -10,9 +10,10 @@ void *call_with_user_stack_impl(user_stack_fn, void *arg, void *arg2);
 #define call_with_user_stack(fn) \
     call_with_user_stack_impl((user_stack_fn)fn, NULL, NULL)
 #define call_with_user_stack_1(fn, a) \
-    call_with_user_stack_impl((user_stack_fn)fn, (void*)(uintptr_t)(a), NULL)
-#define call_with_user_stack_2(fn, a, b) \
-    call_with_user_stack_impl((user_stack_fn)fn, (void*)(uintptr_t)(a), (void*)(uintptr_t)(b))
+    call_with_user_stack_impl((user_stack_fn)fn, (void *)(uintptr_t)(a), NULL)
+#define call_with_user_stack_2(fn, a, b)                                 \
+    call_with_user_stack_impl((user_stack_fn)fn, (void *)(uintptr_t)(a), \
+                              (void *)(uintptr_t)(b))
 
 #else
 

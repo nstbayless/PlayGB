@@ -236,7 +236,7 @@ PGB_LoadedCoverArt pgb_load_and_scale_cover_art_from_path(
         playdate->system->logToConsole(
             "Error string from loadBitmap for %s: %s", cover_path, error_str);
         // FIXME: should we free this?
-        //pgb_free(error_str);
+        // pgb_free(error_str);
     }
 
     if (original_image == NULL)

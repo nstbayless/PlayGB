@@ -13,12 +13,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../peanut_gb/peanut_gb.h"
 #include "app.h"
 #include "dtcm.h"
 #include "game_scene.h"
-#include "script.h"
 #include "jparse.h"
-#include "../peanut_gb/peanut_gb.h"
+#include "script.h"
 
 #ifndef NOLUA
 
@@ -74,28 +74,33 @@ static int pgb_rom_set_breakpoint(lua_State *L)
     // returns: breakpoint index, or null on failure
     if (!lua_check_args(L, 2, 2))
     {
-        return luaL_error(L, "pgb.rom_set_breakpoint(addr, function) takes two arguments");
+        return luaL_error(
+            L, "pgb.rom_set_breakpoint(addr, function) takes two arguments");
     }
-    
-    struct gb_s* gb = get_gb(L);
+
+    struct gb_s *gb = get_gb(L);
     int addr = luaL_checkinteger(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
     size_t rom_size = 0x4000 * (gb->num_rom_banks_mask + 1);
-    
+
     if (addr < 0 || addr >= rom_size)
     {
-        return luaL_error(L, "pgb.rom_set_breakpoint: addr out of range (0-%x)", rom_size - 1);
+        return luaL_error(L, "pgb.rom_set_breakpoint: addr out of range (0-%x)",
+                          rom_size - 1);
     }
     int breakpoint_index = set_hw_breakpoint(gb, addr);
     if (breakpoint_index == -1)
     {
-        return luaL_error(L, "pgb.rom_set_breakpoint: too many breakpoints set");
+        return luaL_error(L,
+                          "pgb.rom_set_breakpoint: too many breakpoints set");
     }
     else if (breakpoint_index < 0)
     {
-        return luaL_error(L, "pgb.rom_set_breakpoint: failed to set breakpoint at addr %x", addr);
+        return luaL_error(
+            L, "pgb.rom_set_breakpoint: failed to set breakpoint at addr %x",
+            addr);
     }
-    
+
     // store the function in a table in the registry
     lua_getfield(L, LUA_REGISTRYINDEX, "pgb_breakpoints");
     if (!lua_istable(L, -1))
@@ -104,12 +109,14 @@ static int pgb_rom_set_breakpoint(lua_State *L)
         lua_setfield(L, LUA_REGISTRYINDEX, "pgb_breakpoints");
         lua_getfield(L, LUA_REGISTRYINDEX, "pgb_breakpoints");
     }
-    
+
     lua_pushinteger(L, breakpoint_index);
     lua_pushvalue(L, 2);  // push the function
-    lua_settable(L, -3);  // set the function in the table with the breakpoint index as key
-    
-    lua_pop(L, 1);  // pop the table
+    lua_settable(
+        L,
+        -3);  // set the function in the table with the breakpoint index as key
+
+    lua_pop(L, 1);                         // pop the table
     lua_pushinteger(L, breakpoint_index);  // return the breakpoint index
     return 1;
 }
@@ -145,16 +152,16 @@ static int pgb_ram_peek(lua_State *L)
     {
         return luaL_error(L, "pgb.ram_peek(addr) takes one argument");
     }
-    
-    struct gb_s* gb = get_gb(L);
-    
+
+    struct gb_s *gb = get_gb(L);
+
     int addr = luaL_checkinteger(L, 1);
-    
+
     if (addr < 0 || addr >= 0x10000)
     {
         return luaL_error(L, "pgb.ram_peek: addr out of range (0-FFFF)");
     }
-    
+
     lua_pushinteger(L, __gb_read_full(gb, addr));
     return 1;
 }
@@ -165,24 +172,24 @@ static int pgb_ram_poke(lua_State *L)
     {
         return luaL_error(L, "pgb.ram_poke(addr, value) takes two arguments");
     }
-    
-    struct gb_s* gb = get_gb(L);
-    
+
+    struct gb_s *gb = get_gb(L);
+
     int addr = luaL_checkinteger(L, 1);
     int val = luaL_checkinteger(L, 2);
-    
+
     if (addr < 0 || addr >= 0x10000)
     {
         return luaL_error(L, "pgb.ram_peek: addr out of range (0-FFFF)");
     }
-    
+
     __gb_write_full(gb, addr, val);
     return 0;
 }
 
 static int pgb_get_gb_buttons(lua_State *L)
 {
-    struct gb_s* gb = get_gb(L);
+    struct gb_s *gb = get_gb(L);
     lua_pushinteger(L, gb->direct.joypad ^ 0xFF);
     return 1;
 }
@@ -212,7 +219,7 @@ void __gb_step_cpu(struct gb_s *gb);
 static int pgb_step_cpu(lua_State *L)
 {
     // UNTESTED
-    struct gb_s* gb = get_gb(L);
+    struct gb_s *gb = get_gb(L);
     __gb_step_cpu(gb);
     return 0;
 }
@@ -231,8 +238,7 @@ static int pgb_close(lua_State *L)
     return 0;
 }
 
-__section__(".rare")
-static int pgb_regs_index(lua_State *L)
+__section__(".rare") static int pgb_regs_index(lua_State *L)
 {
     struct gb_s *gb = get_gb(L);
     const char *reg_name = luaL_checkstring(L, 2);
@@ -297,12 +303,11 @@ static int pgb_regs_index(lua_State *L)
     {
         return luaL_error(L, "pgb.regs: unknown register '%s'", reg_name);
     }
-    
+
     return 1;
 }
 
-__section__(".rare")
-static int pgb_regs_newindex(lua_State *L)
+__section__(".rare") static int pgb_regs_newindex(lua_State *L)
 {
     struct gb_s *gb = get_gb(L);
     const char *reg_name = luaL_checkstring(L, 2);
@@ -364,8 +369,7 @@ static int pgb_regs_newindex(lua_State *L)
     return 0;
 }
 
-__section__(".rare")
-static void register_pgb_library(lua_State *L)
+__section__(".rare") static void register_pgb_library(lua_State *L)
 {
     lua_newtable(L);
     {
@@ -377,28 +381,28 @@ static void register_pgb_library(lua_State *L)
 
         lua_pushcfunction(L, pgb_rom_peek);
         lua_setfield(L, -2, "rom_peek");
-        
+
         lua_pushcfunction(L, pgb_rom_set_breakpoint);
         lua_setfield(L, -2, "rom_set_breakpoint");
-        
+
         lua_pushcfunction(L, pgb_ram_poke);
         lua_setfield(L, -2, "ram_poke");
-        
+
         lua_pushcfunction(L, pgb_ram_peek);
         lua_setfield(L, -2, "ram_peek");
-        
+
         lua_pushcfunction(L, pgb_get_gb_buttons);
         lua_setfield(L, -2, "get_gb_buttons");
-        
+
         lua_pushcfunction(L, pgb_get_crank);
         lua_setfield(L, -2, "get_crank");
 
         lua_pushcfunction(L, pgb_setCrankSoundsDisabled);
         lua_setfield(L, -2, "setCrankSoundsDisabled");
-        
+
         lua_pushcfunction(L, pgb_step_cpu);
         lua_setfield(L, -2, "step_cpu");
-        
+
         // pgb.regs
         lua_newtable(L);
         {
@@ -410,7 +414,6 @@ static void register_pgb_library(lua_State *L)
             lua_setmetatable(L, -2);
         }
         lua_setfield(L, -2, "regs");
-        
     }
     lua_setglobal(L, "pgb");
 }
@@ -473,77 +476,78 @@ static void set_package_path_l(lua_State *L)
 
 typedef struct ScriptInfo
 {
-    char* script_path;
+    char *script_path;
 } ScriptInfo;
 
-__section__(".rare")
-void script_info_free(ScriptInfo* info)
+__section__(".rare") void script_info_free(ScriptInfo *info)
 {
-    if (!info) return;
-    if (info->script_path) free(info->script_path);
+    if (!info)
+        return;
+    if (info->script_path)
+        free(info->script_path);
     free(info);
 }
 
-__section__(".rare")
-ScriptInfo* get_script_info(const char *game_name)
+__section__(".rare") ScriptInfo *get_script_info(const char *game_name)
 {
     json_value v;
     int ok = parse_json("scripts.json", &v);
-    
+
     if (!ok)
     {
         free_json_data(v);
         return NULL;
     }
-    
+
     // confirm that top-level value is an array
-    JsonArray* array = v.data.arrayval;
+    JsonArray *array = v.data.arrayval;
     if (v.type != kJSONArray || array->n == 0)
     {
         free_json_data(v);
         return NULL;
     }
-    
+
     for (size_t i = 0; i < array->n; i++)
     {
         json_value item = array->data[i];
         if (item.type != kJSONTable)
             continue;
-        
+
         const char *name = NULL;
         const char *script_path = NULL;
-        
-        JsonObject* obj = item.data.tableval;
+
+        JsonObject *obj = item.data.tableval;
         for (size_t j = 0; j < obj->n; j++)
         {
             const char *key = obj->data[j].key;
             json_value value = obj->data[j].value;
-            
+
             if (strcmp(key, "name") == 0 && value.type == kJSONString)
             {
                 name = value.data.stringval;
             }
             else if (strcmp(key, "script") == 0 && value.type == kJSONString)
             {
-            #ifdef TARGET_SIMULATOR
+#ifdef TARGET_SIMULATOR
                 char fullpath[1024];
-                snprintf(fullpath, sizeof(fullpath), "Source/%s", value.data.stringval);
+                snprintf(fullpath, sizeof(fullpath), "Source/%s",
+                         value.data.stringval);
                 script_path = strdup(fullpath);
-            #else
+#else
                 script_path = value.data.stringval;
-            #endif
+#endif
             }
         }
-        
+
         if (name && script_path && strcmp(name, game_name) == 0)
         {
-            ScriptInfo* info = malloc(sizeof(ScriptInfo));
+            ScriptInfo *info = malloc(sizeof(ScriptInfo));
             info->script_path = strdup(script_path);
             free_json_data(v);
             return info;
         }
     }
-    
+
     free_json_data(v);
     return NULL;
 }
@@ -556,8 +560,8 @@ lua_State *script_begin(const char *game_name, struct PGB_GameScene *game_scene)
     lua_State *L = NULL;
 
     DTCM_VERIFY();
-    
-    ScriptInfo* info = get_script_info(game_name);
+
+    ScriptInfo *info = get_script_info(game_name);
 
     if (!info)
     {
@@ -627,14 +631,14 @@ void script_tick(lua_State *L)
     }
 }
 
-__section__(".rare")
-void script_on_breakpoint(lua_State* L, int index)
+__section__(".rare") void script_on_breakpoint(lua_State *L, int index)
 {
-    if (!L) return;
-    
+    if (!L)
+        return;
+
     // get lua top, store so it can be reset to later
     int top = lua_gettop(L);
-    
+
     // Execute function from registry, breakpoint number index
     lua_getfield(L, LUA_REGISTRYINDEX, "pgb_breakpoints");
     if (!lua_istable(L, -1))

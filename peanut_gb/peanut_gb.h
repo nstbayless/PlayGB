@@ -202,7 +202,7 @@ typedef struct gb_breakpoint
 {
     // -1 to disable
     uint32_t rom_addr : 24;
-    
+
     // what byte was replaced?
     char opcode;
 } gb_breakpoint;
@@ -538,8 +538,8 @@ struct gb_s
     } direct;
 
     uint32_t gb_cart_ram_size;
-    
-    gb_breakpoint* breakpoints;
+
+    gb_breakpoint *breakpoints;
 
 #if ENABLE_BGCACHE
     uint8_t *bgcache;
@@ -952,7 +952,8 @@ __core_section("bgdefer") void __gb_process_deferred_tile_update(
 }
 
 __shell uint8_t __gb_read_full(struct gb_s *gb, const uint_fast16_t addr);
-__shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr, const uint8_t val);
+__shell void __gb_write_full(struct gb_s *gb, const uint_fast16_t addr,
+                             const uint8_t val);
 
 #endif /* PGB_IMPL */
 
@@ -4871,128 +4872,134 @@ __core void __gb_step_cpu(struct gb_s *gb)
     inst_cycles = __gb_run_instruction_micro(gb);
 #else
     // run once as each, verify
-    
-    if (gb->cpu_reg.pc < 0x8000 && __gb_read_full(gb, gb->cpu_reg.pc) == PGB_HW_BREAKPOINT_OPCODE)
+
+    if (gb->cpu_reg.pc < 0x8000 &&
+        __gb_read_full(gb, gb->cpu_reg.pc) == PGB_HW_BREAKPOINT_OPCODE)
     {
         // can't validate if breakpoint.
         __gb_run_instruction_micro(gb);
     }
-    else {
-    static u8 _wram[2][WRAM_SIZE];
-    static u8 _vram[2][VRAM_SIZE];
-    static u8 _cart_ram[2][0x20000];
-    static struct gb_s _gb[2];
-
-    memcpy(_wram[0], gb->wram, WRAM_SIZE);
-    memcpy(_vram[0], gb->vram, VRAM_SIZE);
-    if (gb->gb_cart_ram_size > 0)
-        memcpy(_cart_ram[0], gb->gb_cart_ram, gb->gb_cart_ram_size);
-    memcpy(&_gb[0], gb, sizeof(_gb));
-
-    uint8_t opcode = (gb->gb_halt ? 0 : __gb_fetch8(gb));
-    inst_cycles = __gb_run_instruction(gb, opcode);
-
-    gb->cpu_reg.f_bits.unused = 0;
-
-    memcpy(_wram[1], gb->wram, WRAM_SIZE);
-    memcpy(_vram[1], gb->vram, VRAM_SIZE);
-    memcpy(&_gb[1], gb, sizeof(struct gb_s));
-    if (gb->gb_cart_ram_size > 0)
-        memcpy(_cart_ram[1], gb->gb_cart_ram, gb->gb_cart_ram_size);
-
-    memcpy(gb->wram, _wram[0], WRAM_SIZE);
-    memcpy(gb->vram, _vram[0], VRAM_SIZE);
-    memcpy(gb, &_gb[0], sizeof(struct gb_s));
-    if (gb->gb_cart_ram_size > 0)
-        memcpy(gb->gb_cart_ram, _cart_ram[0], gb->gb_cart_ram_size);
-
-    uint8_t inst_cycles_m = __gb_run_instruction_micro(gb);
-
-    gb->cpu_reg.f_bits.unused = 0;
-
-    if (memcmp(gb->wram, _wram[1], WRAM_SIZE))
+    else
     {
-        gb->gb_frame = 1;
-        playdate->system->error("difference in wram on opcode %x", opcode);
-    }
-    if (memcmp(gb->vram, _vram[1], VRAM_SIZE))
-    {
-        gb->gb_frame = 1;
-        playdate->system->error("difference in vram on opcode %x", opcode);
-    }
-    if (memcmp(gb->gb_cart_ram, _cart_ram[1], gb->gb_cart_ram_size))
-    {
-        gb->gb_frame = 1;
-        playdate->system->error("difference in cart ram on opcode %x", opcode);
-    }
+        static u8 _wram[2][WRAM_SIZE];
+        static u8 _vram[2][VRAM_SIZE];
+        static u8 _cart_ram[2][0x20000];
+        static struct gb_s _gb[2];
 
-    if (memcmp(&gb->cpu_reg, &_gb[1].cpu_reg, sizeof(struct cpu_registers_s)))
-    {
-        gb->gb_frame = 1;
-        playdate->system->error("difference in CPU regs on opcode %x", opcode);
-        if (gb->cpu_reg.af != _gb[1].cpu_reg.af)
+        memcpy(_wram[0], gb->wram, WRAM_SIZE);
+        memcpy(_vram[0], gb->vram, VRAM_SIZE);
+        if (gb->gb_cart_ram_size > 0)
+            memcpy(_cart_ram[0], gb->gb_cart_ram, gb->gb_cart_ram_size);
+        memcpy(&_gb[0], gb, sizeof(_gb));
+
+        uint8_t opcode = (gb->gb_halt ? 0 : __gb_fetch8(gb));
+        inst_cycles = __gb_run_instruction(gb, opcode);
+
+        gb->cpu_reg.f_bits.unused = 0;
+
+        memcpy(_wram[1], gb->wram, WRAM_SIZE);
+        memcpy(_vram[1], gb->vram, VRAM_SIZE);
+        memcpy(&_gb[1], gb, sizeof(struct gb_s));
+        if (gb->gb_cart_ram_size > 0)
+            memcpy(_cart_ram[1], gb->gb_cart_ram, gb->gb_cart_ram_size);
+
+        memcpy(gb->wram, _wram[0], WRAM_SIZE);
+        memcpy(gb->vram, _vram[0], VRAM_SIZE);
+        memcpy(gb, &_gb[0], sizeof(struct gb_s));
+        if (gb->gb_cart_ram_size > 0)
+            memcpy(gb->gb_cart_ram, _cart_ram[0], gb->gb_cart_ram_size);
+
+        uint8_t inst_cycles_m = __gb_run_instruction_micro(gb);
+
+        gb->cpu_reg.f_bits.unused = 0;
+
+        if (memcmp(gb->wram, _wram[1], WRAM_SIZE))
         {
-            playdate->system->error("AF, was %x, expected %x", gb->cpu_reg.af,
-                                    _gb[1].cpu_reg.af);
+            gb->gb_frame = 1;
+            playdate->system->error("difference in wram on opcode %x", opcode);
         }
-        if (gb->cpu_reg.bc != _gb[1].cpu_reg.bc)
+        if (memcmp(gb->vram, _vram[1], VRAM_SIZE))
         {
-            playdate->system->error("BC, was %x, expected %x", gb->cpu_reg.bc,
-                                    _gb[1].cpu_reg.bc);
+            gb->gb_frame = 1;
+            playdate->system->error("difference in vram on opcode %x", opcode);
         }
-        if (gb->cpu_reg.de != _gb[1].cpu_reg.de)
+        if (memcmp(gb->gb_cart_ram, _cart_ram[1], gb->gb_cart_ram_size))
         {
-            playdate->system->error("DE, was %x, expected %x", gb->cpu_reg.de,
-                                    _gb[1].cpu_reg.de);
+            gb->gb_frame = 1;
+            playdate->system->error("difference in cart ram on opcode %x",
+                                    opcode);
         }
-        if (gb->cpu_reg.hl != _gb[1].cpu_reg.hl)
-        {
-            playdate->system->error("HL, was %x, expected %x", gb->cpu_reg.hl,
-                                    _gb[1].cpu_reg.hl);
-        }
-        if (gb->cpu_reg.sp != _gb[1].cpu_reg.sp)
-        {
-            playdate->system->error("SP, was %x, expected %x", gb->cpu_reg.sp,
-                                    _gb[1].cpu_reg.sp);
-        }
-        if (gb->cpu_reg.pc != _gb[1].cpu_reg.pc)
-        {
-            playdate->system->error("PC, was %x, expected %x", gb->cpu_reg.pc,
-                                    _gb[1].cpu_reg.pc);
-        }
-        goto printregs;
-    }
-    else if (memcmp(gb, &_gb[1], sizeof(struct gb_s)))
-    {
-        gb->gb_frame = 1;
-        playdate->system->error("difference in gb struct on opcode %x", opcode);
-        goto printregs;
-    }
 
-    if (false)
-    {
-    printregs:
-        playdate->system->logToConsole("AF %x -> %x", _gb[0].cpu_reg.af,
-                                       gb->cpu_reg.af);
-        playdate->system->logToConsole("BC %x -> %x", _gb[0].cpu_reg.bc,
-                                       gb->cpu_reg.bc);
-        playdate->system->logToConsole("DE %x -> %x", _gb[0].cpu_reg.de,
-                                       gb->cpu_reg.de);
-        playdate->system->logToConsole("HL %x -> %x", _gb[0].cpu_reg.hl,
-                                       gb->cpu_reg.hl);
-        playdate->system->logToConsole("SP %x -> %x", _gb[0].cpu_reg.sp,
-                                       gb->cpu_reg.sp);
-        playdate->system->logToConsole("PC %x -> %x", _gb[0].cpu_reg.pc,
-                                       gb->cpu_reg.pc);
-    }
+        if (memcmp(&gb->cpu_reg, &_gb[1].cpu_reg,
+                   sizeof(struct cpu_registers_s)))
+        {
+            gb->gb_frame = 1;
+            playdate->system->error("difference in CPU regs on opcode %x",
+                                    opcode);
+            if (gb->cpu_reg.af != _gb[1].cpu_reg.af)
+            {
+                playdate->system->error("AF, was %x, expected %x",
+                                        gb->cpu_reg.af, _gb[1].cpu_reg.af);
+            }
+            if (gb->cpu_reg.bc != _gb[1].cpu_reg.bc)
+            {
+                playdate->system->error("BC, was %x, expected %x",
+                                        gb->cpu_reg.bc, _gb[1].cpu_reg.bc);
+            }
+            if (gb->cpu_reg.de != _gb[1].cpu_reg.de)
+            {
+                playdate->system->error("DE, was %x, expected %x",
+                                        gb->cpu_reg.de, _gb[1].cpu_reg.de);
+            }
+            if (gb->cpu_reg.hl != _gb[1].cpu_reg.hl)
+            {
+                playdate->system->error("HL, was %x, expected %x",
+                                        gb->cpu_reg.hl, _gb[1].cpu_reg.hl);
+            }
+            if (gb->cpu_reg.sp != _gb[1].cpu_reg.sp)
+            {
+                playdate->system->error("SP, was %x, expected %x",
+                                        gb->cpu_reg.sp, _gb[1].cpu_reg.sp);
+            }
+            if (gb->cpu_reg.pc != _gb[1].cpu_reg.pc)
+            {
+                playdate->system->error("PC, was %x, expected %x",
+                                        gb->cpu_reg.pc, _gb[1].cpu_reg.pc);
+            }
+            goto printregs;
+        }
+        else if (memcmp(gb, &_gb[1], sizeof(struct gb_s)))
+        {
+            gb->gb_frame = 1;
+            playdate->system->error("difference in gb struct on opcode %x",
+                                    opcode);
+            goto printregs;
+        }
 
-    if (inst_cycles != inst_cycles_m)
-    {
-        gb->gb_frame = 1;
-        playdate->system->error(
-            "cycle difference on opcode %x (expected %d, was %d)", opcode,
-            inst_cycles, inst_cycles_m);
-    }
+        if (false)
+        {
+        printregs:
+            playdate->system->logToConsole("AF %x -> %x", _gb[0].cpu_reg.af,
+                                           gb->cpu_reg.af);
+            playdate->system->logToConsole("BC %x -> %x", _gb[0].cpu_reg.bc,
+                                           gb->cpu_reg.bc);
+            playdate->system->logToConsole("DE %x -> %x", _gb[0].cpu_reg.de,
+                                           gb->cpu_reg.de);
+            playdate->system->logToConsole("HL %x -> %x", _gb[0].cpu_reg.hl,
+                                           gb->cpu_reg.hl);
+            playdate->system->logToConsole("SP %x -> %x", _gb[0].cpu_reg.sp,
+                                           gb->cpu_reg.sp);
+            playdate->system->logToConsole("PC %x -> %x", _gb[0].cpu_reg.pc,
+                                           gb->cpu_reg.pc);
+        }
+
+        if (inst_cycles != inst_cycles_m)
+        {
+            gb->gb_frame = 1;
+            playdate->system->error(
+                "cycle difference on opcode %x (expected %d, was %d)", opcode,
+                inst_cycles, inst_cycles_m);
+        }
     }
 #endif
 
@@ -5224,8 +5231,7 @@ uint8_t gb_colour_hash(struct gb_s *gb)
 /**
  * Resets the context, and initialises startup values.
  */
-__section__(".rare")
-void gb_reset(struct gb_s *gb)
+__section__(".rare") void gb_reset(struct gb_s *gb)
 {
     gb->gb_halt = 0;
     gb->gb_ime = 1;
@@ -5290,13 +5296,12 @@ void gb_reset(struct gb_s *gb)
  * Initialise the emulator context. gb_reset() is also called to initialise
  * the CPU.
  */
-__section__(".rare")
-enum gb_init_error_e gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram,
-                             uint8_t *lcd, uint8_t *gb_rom,
-                             void (*gb_error)(struct gb_s *,
-                                              const enum gb_error_e,
-                                              const uint16_t),
-                             void *priv)
+__section__(".rare") enum gb_init_error_e
+    gb_init(struct gb_s *gb, uint8_t *wram, uint8_t *vram, uint8_t *lcd,
+            uint8_t *gb_rom,
+            void (*gb_error)(struct gb_s *, const enum gb_error_e,
+                             const uint16_t),
+            void *priv)
 {
     const uint16_t mbc_location = 0x0147;
     const uint16_t bank_count_location = 0x0148;
@@ -5433,47 +5438,51 @@ static unsigned __gb_run_instruction_micro(struct gb_s *gb);
 
 // returns negative if failure
 // returns breakpoint index otherwise
-__section__(".rare")
-int set_hw_breakpoint(struct gb_s *gb, uint32_t rom_addr)
+__section__(".rare") int set_hw_breakpoint(struct gb_s *gb, uint32_t rom_addr)
 {
-    size_t rom_size = 0x4000*(gb->num_rom_banks_mask+1);
-    if (rom_addr > rom_size) return -2;
-    
+    size_t rom_size = 0x4000 * (gb->num_rom_banks_mask + 1);
+    if (rom_addr > rom_size)
+        return -2;
+
     for (size_t i = 0; i < MAX_BREAKPOINTS; ++i)
     {
-        if (gb->breakpoints[i].rom_addr != 0xFFFFFF) continue;
-        
+        if (gb->breakpoints[i].rom_addr != 0xFFFFFF)
+            continue;
+
         // found a breakpoint slot to use
         gb->breakpoints[i].rom_addr = rom_addr;
         gb->breakpoints[i].opcode = gb->gb_rom[rom_addr];
         gb->gb_rom[rom_addr] = PGB_HW_BREAKPOINT_OPCODE;
         return i;
     }
-    
+
     // couldn't find a breakpoint
     return -1;
 }
 
 // returns 0 if no breakpoint at current location
 // returns cycles executed if breakpoint existed (runs breakpoint)
-static __section__(".rare")
-int __gb_try_breakpoint(struct gb_s *gb)
+static __section__(".rare") int __gb_try_breakpoint(struct gb_s *gb)
 {
     // only ROM-address breakpoints are supported
     size_t pc = gb->cpu_reg.pc - 1;
-    if (pc >= 0x8000) return 0;
-    size_t rom_addr = (pc < 0x4000)
-        ? pc
-        : (pc % 0x4000) | ((gb->selected_rom_bank & gb->num_rom_banks_mask) * ROM_BANK_SIZE);
-    
+    if (pc >= 0x8000)
+        return 0;
+    size_t rom_addr =
+        (pc < 0x4000) ? pc
+                      : (pc % 0x4000) |
+                            ((gb->selected_rom_bank & gb->num_rom_banks_mask) *
+                             ROM_BANK_SIZE);
+
     for (int i = 0; i < MAX_BREAKPOINTS; ++i)
     {
         int bp_addr = gb->breakpoints[i].rom_addr;
         int opcode = gb->breakpoints[i].opcode;
-        if ((rom_addr & 0xFFFFFF) != bp_addr) continue;
+        if ((rom_addr & 0xFFFFFF) != bp_addr)
+            continue;
         // breakpoint found!
-        
-        if unlikely(opcode == PGB_HW_BREAKPOINT_OPCODE)
+
+        if unlikely (opcode == PGB_HW_BREAKPOINT_OPCODE)
         {
             // this is pretty messed up, but let's handle it gracefully
             __gb_on_breakpoint(gb, i);
@@ -5485,27 +5494,27 @@ int __gb_try_breakpoint(struct gb_s *gb)
             gb->gb_rom[rom_addr] = opcode;
             uint16_t prev_pc = --gb->cpu_reg.pc;
             uint16_t prev_bank = gb->selected_rom_bank;
-            
+
             // handle breakpoint
             __gb_on_breakpoint(gb, i);
-            
+
             int cycles = 0;
-            
+
             // if bank,PC did not change, perform replaced instruction
             if (prev_pc == gb->cpu_reg.pc && prev_bank == gb->selected_rom_bank)
             {
                 cycles = __gb_run_instruction_micro(gb);
             }
-            
+
             // restore breakpoint
             gb->breakpoints[i].opcode = gb->gb_rom[rom_addr];
             gb->gb_rom[rom_addr] = PGB_HW_BREAKPOINT_OPCODE;
             return cycles <= 0 ? 4 : cycles;
         }
-        
+
         return 1;
     }
-    
+
     return 0;
 }
 
@@ -5533,9 +5542,8 @@ void gb_init_lcd(struct gb_s *gb)
 
 #endif
 
-__section__(".rare") static
-u8 __gb_invalid_instruction(struct gb_s *restrict gb,
-    uint8_t opcode)
+__section__(".rare") static u8
+    __gb_invalid_instruction(struct gb_s *restrict gb, uint8_t opcode)
 {
     if (opcode == PGB_HW_BREAKPOINT_OPCODE)
     {

@@ -569,7 +569,8 @@ typedef typeof(playdate->graphics->markUpdatedRows) markUpdateRows_t;
 
 __core_section("fb") void update_fb_dirty_lines(
     uint8_t *restrict framebuffer, uint8_t *restrict lcd,
-    const uint16_t *restrict line_changed_flags, markUpdateRows_t markUpdateRows)
+    const uint16_t *restrict line_changed_flags,
+    markUpdateRows_t markUpdateRows)
 {
     framebuffer += (PGB_LCD_X / 8);
     // const u32 dither = 0b00011111 | (0b00001011 << 8);
@@ -581,7 +582,7 @@ __core_section("fb") void update_fb_dirty_lines(
         PGB_dither_lut_c0 | ((uint32_t)PGB_dither_lut_c1 << 16);
 
     for (int y_gb = LCD_HEIGHT;
-         y_gb --> 0;)  // y_gb is Game Boy line index from top, 143 down to 0
+         y_gb-- > 0;)  // y_gb is Game Boy line index from top, 143 down to 0
     {
         int row_height_on_playdate = 2;
         if (scale_index++ == 2)
@@ -802,7 +803,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         }
 #endif
 
-    PGB_ASSERT(context == context->gb->direct.priv);
+        PGB_ASSERT(context == context->gb->direct.priv);
 
 #ifdef DTCM_ALLOC
         DTCM_VERIFY_DEBUG();
@@ -811,7 +812,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
 #else
         // copy gb to stack (DTCM) temporarily
         struct gb_s gb;
-        struct gb_s* tmp_gb = context->gb;
+        struct gb_s *tmp_gb = context->gb;
         context->gb = &gb;
         memcpy(&gb, tmp_gb, sizeof(struct gb_s));
 
@@ -826,24 +827,24 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
             save_check(context->gb);
         }
 
-        #if DYNAMIC_RATE_ADJUSTMENT
+#if DYNAMIC_RATE_ADJUSTMENT
         float logic_time = playdate->system->getElapsedTime();
-        #endif
+#endif
 
         // --- Conditional Screen Update (Drawing) Logic ---
         uint8_t *current_lcd = context->gb->lcd;
         int line_changed_count = 0;
-        uint16_t line_has_changed[LCD_HEIGHT/16];
-        for (int y = 0; y < LCD_HEIGHT/16; y++)
+        uint16_t line_has_changed[LCD_HEIGHT / 16];
+        for (int y = 0; y < LCD_HEIGHT / 16; y++)
         {
             uint16_t changed = 0;
             for (int y2 = 0; y2 < 16; ++y2)
             {
                 changed >>= 1;
-                uint8_t sy = (y*16) | y2;
+                uint8_t sy = (y * 16) | y2;
                 if (memcmp(&current_lcd[sy * LCD_WIDTH_PACKED],
-                        &context->previous_lcd[sy * LCD_WIDTH_PACKED],
-                        LCD_WIDTH_PACKED) != 0)
+                           &context->previous_lcd[sy * LCD_WIDTH_PACKED],
+                           LCD_WIDTH_PACKED) != 0)
                 {
                     changed |= 0x8000;
                 }
@@ -852,20 +853,24 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
             line_has_changed[y] = changed;
         }
 
-        #if DYNAMIC_RATE_ADJUSTMENT
+#if DYNAMIC_RATE_ADJUSTMENT
         uint16_t interlace_mask = 0xFFFF;
         static int interlace_i = 0;
-        float time_for_rendering = TARGET_RENDER_TIME_S - LINE_RENDER_MARGIN_S - logic_time;
+        float time_for_rendering =
+            TARGET_RENDER_TIME_S - LINE_RENDER_MARGIN_S - logic_time;
         static int frame_i = 0;
         if (++frame_i % 256 == 16)
         {
-            printf("logic: %f, time for rendering: %f; %f\n", 1000*(double)logic_time, 1000 * (double)time_for_rendering, 1000 * (double)(line_changed_count * LINE_RENDER_TIME_S));
+            printf("logic: %f, time for rendering: %f; %f\n",
+                   1000 * (double)logic_time, 1000 * (double)time_for_rendering,
+                   1000 * (double)(line_changed_count * LINE_RENDER_TIME_S));
         }
         if (time_for_rendering < line_changed_count * LINE_RENDER_TIME_S)
         {
             ++interlace_i;
 
-            if (time_for_rendering >= line_changed_count * LINE_RENDER_TIME_S * 0.75f)
+            if (time_for_rendering >=
+                line_changed_count * LINE_RENDER_TIME_S * 0.75f)
             {
                 // render 3 out of 4 lines
                 interlace_mask = 0b11101110111011101110 >> (interlace_i % 4);
@@ -873,54 +878,51 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
             else
             {
                 // render 1 out of 2 lines
-                interlace_mask = (interlace_i % 2)
-                ? 0b1010101010101010
-                : 0b0101010101010101;
+                interlace_mask =
+                    (interlace_i % 2) ? 0b1010101010101010 : 0b0101010101010101;
             }
         }
 
         static volatile int k = 0;
         if (k == 1)
             interlace_mask = 0xFFFF;
-        #endif
+#endif
 
         // Determine if drawing is actually needed based on changes or
         // forced display
         bool actual_gb_draw_needed = true;
-            //gbScreenRequiresFullRefresh;
+        // gbScreenRequiresFullRefresh;
 
         if (actual_gb_draw_needed)
         {
             if (gbScreenRequiresFullRefresh)
             {
-                for (int i = 0; i < LCD_HEIGHT/16; i++)
+                for (int i = 0; i < LCD_HEIGHT / 16; i++)
                 {
                     line_has_changed[i] = 0xFFFF;
                 }
             }
-            #if DYNAMIC_RATE_ADJUSTMENT
+#if DYNAMIC_RATE_ADJUSTMENT
             else
             {
-                for (int i = 0; i < LCD_HEIGHT/16; i++)
+                for (int i = 0; i < LCD_HEIGHT / 16; i++)
                 {
                     line_has_changed[i] &= interlace_mask;
                 }
             }
-            #endif
+#endif
 
             ITCM_CORE_FN(update_fb_dirty_lines)(
-                playdate->graphics->getFrame(), current_lcd,
-                line_has_changed, playdate->graphics->markUpdatedRows);
+                playdate->graphics->getFrame(), current_lcd, line_has_changed,
+                playdate->graphics->markUpdatedRows);
 
             for (int i = 0; i < LCD_HEIGHT; i++)
             {
-                if ((line_has_changed[i/16] >> (i%16)) & 1)
+                if ((line_has_changed[i / 16] >> (i % 16)) & 1)
                 {
                     ITCM_CORE_FN(gb_fast_memcpy_32)(
-                        context->previous_lcd + LCD_WIDTH_PACKED*i,
-                        current_lcd + LCD_WIDTH_PACKED*i,
-                        LCD_WIDTH_PACKED
-                    );
+                        context->previous_lcd + LCD_WIDTH_PACKED * i,
+                        current_lcd + LCD_WIDTH_PACKED * i, LCD_WIDTH_PACKED);
                 }
             }
         }
@@ -1355,8 +1357,8 @@ static void PGB_GameScene_free(void *object)
     DTCM_VERIFY_DEBUG();
 }
 
-__section__(".rare")
-void __gb_on_breakpoint(struct gb_s *gb, int breakpoint_number)
+__section__(".rare") void __gb_on_breakpoint(struct gb_s *gb,
+                                             int breakpoint_number)
 {
     PGB_GameSceneContext *context = gb->direct.priv;
     PGB_GameScene *gameScene = context->scene;
@@ -1366,5 +1368,6 @@ void __gb_on_breakpoint(struct gb_s *gb, int breakpoint_number)
     PGB_ASSERT(gameScene->context->gb->direct.priv == context);
     PGB_ASSERT(gameScene->context->gb == gb);
 
-    call_with_user_stack_2(script_on_breakpoint, gameScene->script, breakpoint_number);
+    call_with_user_stack_2(script_on_breakpoint, gameScene->script,
+                           breakpoint_number);
 }

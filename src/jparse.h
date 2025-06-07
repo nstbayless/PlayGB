@@ -1,11 +1,12 @@
 #pragma once
 
-#include "pd_api.h"
 #include <stdint.h>
+
+#include "pd_api.h"
 
 typedef struct TableKeyPair
 {
-    char* key;
+    char *key;
     json_value value;
 } TableKeyPair;
 
@@ -22,4 +23,4 @@ typedef struct JsonArray
 } JsonArray;
 
 void free_json_data(json_value);
-int parse_json(const char* file, json_value* out);
+int parse_json(const char *file, json_value *out);
