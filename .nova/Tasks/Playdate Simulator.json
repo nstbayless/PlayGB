@@ -7,7 +7,7 @@
   "extensionValues" : {
     "playdate.build-type" : "make",
     "playdate.debugRequest" : "attach",
-    "playdate.product-name" : "PlayGB"
+    "playdate.product-name" : "CrankBoy"
   },
   "openLogOnRun" : "fail"
 }

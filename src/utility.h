@@ -1,8 +1,9 @@
 //
 //  utility.h
-//  PlayGB
+//  CrankBoy
 //
 //  Created by Matteo D'Ignazio on 14/05/22.
+//  Maintained and developed by the CrankBoy dev team.
 //
 
 #ifndef utility_h

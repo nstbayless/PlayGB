@@ -1,8 +1,9 @@
 //
 //  library_scene.h
-//  PlayGB
+//  CrankBoy
 //
 //  Created by Matteo D'Ignazio on 15/05/22.
+//  Maintained and developed by the CrankBoy dev team.
 //
 
 #ifndef library_scene_h

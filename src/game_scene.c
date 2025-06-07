@@ -1,8 +1,9 @@
 //
 //  game_scene.c
-//  PlayGB
+//  CrankBoy
 //
 //  Created by Matteo D'Ignazio on 14/05/22.
+//  Maintained and developed by the CrankBoy dev team.
 //
 
 #define PGB_IMPL
@@ -1066,7 +1067,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
                 errorTitle = "Wrong location";
                 errorMessagesCount = 2;
                 errorMessages[0] = "Please move the ROM to";
-                errorMessages[1] = "/Data/*.playgb/games/";
+                errorMessages[1] = "/Data/*.crankboy/games/";
             }
             else if (gameScene->error == PGB_GameSceneErrorFatal)
             {

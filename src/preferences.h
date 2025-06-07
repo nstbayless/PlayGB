@@ -1,8 +1,9 @@
 //
 //  preferences.h
-//  PlayGB
+//  CrankBoy
 //
 //  Created by Matteo D'Ignazio on 18/05/22.
+//  Maintained and developed by the CrankBoy dev team.
 //
 
 #ifndef preferences_h

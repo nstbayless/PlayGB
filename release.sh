@@ -1,4 +1,4 @@
-PDX="./PlayGB.pdx"
+PDX="./CrankBoy.pdx"
 ZIP="$PDX.zip"
 
 set -e

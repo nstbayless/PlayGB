@@ -1,8 +1,9 @@
 //
 //  library_scene.c
-//  PlayGB
+//  CrankBoy
 //
 //  Created by Matteo D'Ignazio on 15/05/22.
+//  Maintained and developed by the CrankBoy dev team.
 //
 
 #include "library_scene.h"
@@ -294,9 +295,9 @@ static void PGB_LibraryScene_update(void *object)
     {
         if (needsDisplay)
         {
-            static const char *title = "PlayGB";
+            static const char *title = "CrankBoy";
             static const char *message1 = "Connect to a computer and";
-            static const char *message2 = "copy games to Data/*.playgb/games";
+            static const char *message2 = "copy games to Data/*.crankboy/games";
 
             playdate->graphics->clear(kColorWhite);
 

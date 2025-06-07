@@ -1,8 +1,9 @@
 //
 //  listview.c
-//  PlayGB
+//  CrankBoy
 //
 //  Created by Matteo D'Ignazio on 16/05/22.
+//  Maintained and developed by the CrankBoy dev team.
 //
 
 #include "listview.h"

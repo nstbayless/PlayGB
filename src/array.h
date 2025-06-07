@@ -1,8 +1,9 @@
 //
 //  array.c
-//  PlayGB
+//  CrankBoy
 //
 //  Created by Matteo D'Ignazio on 23/08/21.
+//  Maintained and developed by the CrankBoy dev team.
 //
 
 #ifndef array_h
