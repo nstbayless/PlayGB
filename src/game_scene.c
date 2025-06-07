@@ -21,7 +21,7 @@
 #include "game_scene.h"
 // clang-format on
 
-// attempt to stay on top of frames per second 
+// attempt to stay on top of frames per second
 #define DYNAMIC_RATE_ADJUSTMENT 1
 
 // TODO: double-check these
@@ -108,7 +108,7 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
 {
     playdate->system->logToConsole("ROM: %s", rom_filename);
     playdate->system->setCrankSoundsDisabled(true);
-    
+
     if (!DTCM_VERIFY_DEBUG())
         return NULL;
 
@@ -307,7 +307,7 @@ PGB_GameScene *PGB_GameScene_new(const char *rom_filename)
     }
 #endif
     DTCM_VERIFY();
-    
+
     PGB_ASSERT(gameScene->context == context);
     PGB_ASSERT(gameScene->context->scene == gameScene);
     PGB_ASSERT(gameScene->context->gb->direct.priv == context);
@@ -801,7 +801,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
             script_tick(context->scene->script);
         }
 #endif
-    
+
     PGB_ASSERT(context == context->gb->direct.priv);
 
 #ifdef DTCM_ALLOC
@@ -825,11 +825,11 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         {
             save_check(context->gb);
         }
-        
+
         #if DYNAMIC_RATE_ADJUSTMENT
         float logic_time = playdate->system->getElapsedTime();
         #endif
-        
+
         // --- Conditional Screen Update (Drawing) Logic ---
         uint8_t *current_lcd = context->gb->lcd;
         int line_changed_count = 0;
@@ -848,10 +848,10 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
                     changed |= 0x8000;
                 }
             }
-            
+
             line_has_changed[y] = changed;
         }
-        
+
         #if DYNAMIC_RATE_ADJUSTMENT
         uint16_t interlace_mask = 0xFFFF;
         static int interlace_i = 0;
@@ -864,7 +864,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         if (time_for_rendering < line_changed_count * LINE_RENDER_TIME_S)
         {
             ++interlace_i;
-            
+
             if (time_for_rendering >= line_changed_count * LINE_RENDER_TIME_S * 0.75f)
             {
                 // render 3 out of 4 lines
@@ -878,7 +878,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
                 : 0b0101010101010101;
             }
         }
-        
+
         static volatile int k = 0;
         if (k == 1)
             interlace_mask = 0xFFFF;
@@ -887,7 +887,7 @@ __section__(".text.tick") __space static void PGB_GameScene_update(void *object)
         // Determine if drawing is actually needed based on changes or
         // forced display
         bool actual_gb_draw_needed = true;
-            //context->gb->lcd_master_enable || gbScreenRequiresFullRefresh;
+            //gbScreenRequiresFullRefresh;
 
         if (actual_gb_draw_needed)
         {
@@ -1164,13 +1164,6 @@ __section__(".rare") void PGB_GameScene_didSelectLibrary(void *userdata)
     DTCM_VERIFY();
 }
 
-static void PGB_GameScene_didToggleLCD(void *userdata)
-{
-    PGB_GameScene *gameScene = userdata;
-
-    gameScene->context->gb->lcd_master_enable ^= 1;
-}
-
 static void PGB_GameScene_menu(void *object)
 {
     PGB_GameScene *gameScene = object;
@@ -1250,12 +1243,6 @@ static void PGB_GameScene_menu(void *object)
 
     playdate->system->addMenuItem("Library", PGB_GameScene_didSelectLibrary,
                                   gameScene);
-
-    if (gameScene->state == PGB_GameSceneStateLoaded)
-    {
-        playdate->system->addCheckmarkMenuItem(
-            "LCD", 1, PGB_GameScene_didToggleLCD, gameScene);
-    }
 }
 
 static void PGB_GameScene_generateBitmask(void)
@@ -1373,11 +1360,11 @@ void __gb_on_breakpoint(struct gb_s *gb, int breakpoint_number)
 {
     PGB_GameSceneContext *context = gb->direct.priv;
     PGB_GameScene *gameScene = context->scene;
-    
+
     PGB_ASSERT(gameScene->context == context);
     PGB_ASSERT(gameScene->context->scene == gameScene);
     PGB_ASSERT(gameScene->context->gb->direct.priv == context);
     PGB_ASSERT(gameScene->context->gb == gb);
-    
+
     call_with_user_stack_2(script_on_breakpoint, gameScene->script, breakpoint_number);
 }
